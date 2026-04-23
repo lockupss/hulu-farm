@@ -38,7 +38,7 @@ export default function Community() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }] }>
       <View style={styles.header}>
-  <Text style={[styles.headerTitle, { color: colors.text }]}>Community Forum</Text>
+  <Text style={[styles.headerTitle, { color: colors.text }]}>Forum</Text>
   <Text style={[styles.headerSubtitle, { color: muted }]}>Connect with farmers and share experiences</Text>
       </View>
 

@@ -45,20 +45,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="disease"
-        options={{
-          title: 'Disease',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bandage.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="farm"
-        options={{
-          title: 'Farm',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="leaf.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="notifications"
         options={{
           title: 'Alerts',
@@ -68,7 +54,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
-          title: 'Community',
+            title: 'Forum',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} />,
         }}
       />
