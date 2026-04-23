@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { Colors } from '@/constants/theme'
+import React, { useEffect, useState } from 'react'
+import { saveItem, loadItem } from '@/lib/storage'
 
 function DiscussionItem({ item }: { item: any }) {
   return (
@@ -34,6 +36,25 @@ export default function Community() {
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
   const muted = colorScheme === 'dark' ? '#9CA3AF' : '#6B7280'
+  const [posts, setPosts] = useState<any[]>([])
+  const [text, setText] = useState('')
+
+  useEffect(() => {
+    ;(async () => {
+      const stored = await loadItem('forum_posts')
+      if (stored) setPosts(stored)
+      else setPosts(forumData)
+    })()
+  }, [])
+
+  const handlePost = async () => {
+    if (!text.trim()) return
+    const newPost = { id: Date.now(), author: 'You', title: text.slice(0, 30), content: text, replies: 0, likes: 0, time: 'Just now', category: 'General' }
+    const next = [newPost, ...posts]
+    setPosts(next)
+    await saveItem('forum_posts', next)
+    setText('')
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }] }>
@@ -43,9 +64,9 @@ export default function Community() {
       </View>
 
       <Card style={{ marginHorizontal: 16 }}>
-        <Input placeholder="What's on your mind?" />
+        <Input placeholder="What's on your mind?" value={text} onChangeText={setText} />
         <View style={{ flexDirection: 'row', marginTop: 10 }}>
-          <Button style={{ flex: 1, marginRight: 8 }}>
+          <Button style={{ flex: 1, marginRight: 8 }} onPress={handlePost}>
             Post Discussion
           </Button>
           <Button variant="outline" style={{ flex: 1 }}>
@@ -55,7 +76,7 @@ export default function Community() {
       </Card>
 
       <FlatList
-        data={forumData}
+        data={posts}
         keyExtractor={(i) => String(i.id)}
         renderItem={({ item }) => (
           <Card style={{ marginHorizontal: 16 }}>

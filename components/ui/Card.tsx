@@ -1,21 +1,32 @@
 import React from 'react'
 import { View, StyleSheet } from 'react-native'
 
-export const Card = ({ children, style }: { children: React.ReactNode; style?: any }) => {
-  return <View style={[styles.card, style]}>{children}</View>
+export const Card = ({ children, style, variant }: { children: React.ReactNode; style?: any; variant?: 'default' | 'alert' | 'info' }) => {
+  const variantStyle = variant === 'alert' ? styles.alert : variant === 'info' ? styles.info : null
+  return <View style={[styles.card, variantStyle, style]}>{children}</View>
 }
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 10,
+    padding: 14,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
-    elevation: 2,
+    elevation: 1,
   },
+  alert: {
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFF7ED'
+  },
+  info: {
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF'
+  }
 })
 
 export default Card
