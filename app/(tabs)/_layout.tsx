@@ -38,6 +38,34 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="market"
+        options={{
+          title: 'Market',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="disease"
+        options={{
+          title: 'Disease',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bandage.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="farm"
+        options={{
+          title: 'Farm',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="leaf.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Alerts',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bell.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="community"
         options={{
           title: 'Community',

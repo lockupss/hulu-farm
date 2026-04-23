@@ -1,0 +1,4 @@
+[
+  { "id": 1, "name": "Leaf Rust", "confidence": "92%", "recommendation": "Apply fungicide and remove infected leaves" },
+  { "id": 2, "name": "Blight", "confidence": "85%", "recommendation": "Rotate crops and avoid overhead irrigation" }
+]

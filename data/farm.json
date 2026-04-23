@@ -1,0 +1,6 @@
+{
+  "fields": [
+    { "id": 1, "name": "Field A", "area": "2 ha", "crop": "Maize" },
+    { "id": 2, "name": "Field B", "area": "1.5 ha", "crop": "Teff" }
+  ]
+}

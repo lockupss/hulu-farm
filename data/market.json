@@ -1,0 +1,6 @@
+[
+  { "name": "Maize", "price": "2,450 Br", "change": "+5%" },
+  { "name": "Wheat", "price": "3,100 Br", "change": "+2%" },
+  { "name": "Teff", "price": "5,200 Br", "change": "-3%" },
+  { "name": "Beans", "price": "4,800 Br", "change": "+1%" }
+]
