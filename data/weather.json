@@ -1,0 +1,17 @@
+{
+  "location": "Addis Ababa Region",
+  "updated": "10 min ago",
+  "current": {
+    "temp": 28,
+    "condition": "Partly Cloudy",
+    "humidity": "65%",
+    "wind": "12 km/h",
+    "visibility": "10 km",
+    "pressure": "1013 mb"
+  },
+  "alerts": [
+    { "title": "Heavy Rain Warning", "detail": "In 12-24 hours, 40-60mm expected", "type": "alert" },
+    { "title": "Temperature Drop", "detail": "5°C decrease expected tomorrow", "type": "info" }
+  ],
+  "forecast": ["Today", "Tomorrow", "Wed", "Thu", "Fri", "Sat", "Sun"]
+}
