@@ -6,6 +6,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme'
 import { ActivityIndicator, FlatList, PermissionsAndroid, Platform, StyleSheet, Text, View } from 'react-native'
 import { fetchWeather, loadCachedWeather } from '@/lib/weather'
 import Sparkline from '@/components/sparkline'
+import { saveOfflineWeather, loadOfflineWeather, clearOfflineWeather } from '@/lib/weather'
 
 export default function Weather() {
   const colorScheme = useColorScheme()
@@ -13,6 +14,7 @@ export default function Weather() {
   const [loading, setLoading] = useState(true)
   const [weather, setWeather] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [offlineAvailable, setOfflineAvailable] = useState(false)
   const geoWatchIdRef = useRef<number | null>(null)
   const locWatchRemoverRef = useRef<(() => void) | null>(null)
 
@@ -22,6 +24,8 @@ export default function Weather() {
       // load cached first
       const cached = await loadCachedWeather()
       if (cached && mounted) setWeather(cached)
+      const off = await loadOfflineWeather()
+      if (off && mounted) setOfflineAvailable(true)
 
       // get location and subscribe to changes
       try {
@@ -123,8 +127,8 @@ export default function Weather() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }] }>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Weather Alerts & Forecasts</Text>
-        <Text style={styles.subtitle}>Hyper-localized weather information for your farm</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Weather</Text>
+        <Text style={[styles.subtitle, { fontSize: 14 }]}>Real-time weather for your location</Text>
       </View>
 
       {loading ? (
@@ -139,29 +143,48 @@ export default function Weather() {
           keyExtractor={() => 'current'}
           renderItem={({ item }) => (
             <CardUI style={{ margin: 16 }}>
-              <CardHeader>
-                <CardTitle>Current Weather</CardTitle>
-              </CardHeader>
-              <View style={{ paddingTop: 8 }}>
-                <View style={styles.currentRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.emoji}>{getEmojiForWeather(item.data.current_weather?.weathercode)}</Text>
-                    <View style={{ marginLeft: 12 }}>
-                      <Text style={styles.temp}>{Math.round(item.data.current_weather?.temperature)}°C</Text>
-                      <Text style={styles.muted}>{`Wind ${Math.round(item.data.current_weather?.windspeed)} km/h`}</Text>
-                    </View>
+              <View style={{ padding: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View>
+                    <Text style={{ fontSize: 28, fontWeight: '800' }}>{item.place || 'Your location'}</Text>
+                    <Text style={{ color: '#6b7280', marginTop: 4 }}>Last updated {new Date(item.fetchedAt).toLocaleTimeString()}</Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.muted}>{item.place || 'Current location'}</Text>
-                    <Text style={styles.muted}>Last updated {new Date(item.fetchedAt).toLocaleTimeString()}</Text>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ fontSize: 42 }}>{getEmojiForWeather(item.data.current_weather?.weathercode)}</Text>
+                    <Text style={{ fontSize: 36, fontWeight: '800' }}>{Math.round(item.data.current_weather?.temperature)}°C</Text>
                   </View>
                 </View>
 
-                <View style={styles.metricsRow}>
-                  <View style={styles.metric}><Text style={styles.metricLabel}>💧 Humidity</Text><Text style={styles.metricValue}>{item.data.current_weather?.relativehumidity ?? '--'}</Text></View>
-                  <View style={styles.metric}><Text style={styles.metricLabel}>💨 Wind</Text><Text style={styles.metricValue}>{Math.round(item.data.current_weather?.windspeed ?? 0)} km/h</Text></View>
-                  <View style={styles.metric}><Text style={styles.metricLabel}>👁️ Visibility</Text><Text style={styles.metricValue}>{'--'}</Text></View>
-                  <View style={styles.metric}><Text style={styles.metricLabel}>Pressure</Text><Text style={styles.metricValue}>{'--'}</Text></View>
+                <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>Wind</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700' }}>{Math.round(item.data.current_weather?.windspeed ?? 0)} km/h</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>Humidity</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700' }}>{item.data.current_weather?.relativehumidity ?? '--'}%</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>Precip</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '700' }}>{Math.round((item.data.daily.precipitation_sum?.[0] || 0) * 10) / 10} mm</Text>
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, color: '#6b7280' }}>7-day temperature</Text>
+                    <Sparkline values={(item.data.daily && item.data.daily.temperature_2m_max) || []} />
+                  </View>
+                  <View style={{ marginLeft: 12 }}>
+                    <Text style={{ color: '#6b7280' }}>Actions</Text>
+                    <View style={{ marginTop: 8 }}>
+                      <Text onPress={async () => { setLoading(true); try { const w = await fetchWeather(item.data.current_weather.latitude, item.data.current_weather.longitude); setWeather(w); } catch (e) { setError('Failed to refresh') } finally { setLoading(false) } }} style={{ color: colors.tint, marginBottom: 8 }}>Refresh</Text>
+                      {offlineAvailable ? (
+                        <Text onPress={async () => { const off = await loadOfflineWeather(); if (off) setWeather(off); }} style={{ color: colors.tint, marginBottom: 8 }}>Use Offline</Text>
+                      ) : null}
+                      <Text onPress={async () => { const ok = await saveOfflineWeather(); if (ok) setOfflineAvailable(true) }} style={{ color: colors.tint }}>Save for offline</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
             </CardUI>

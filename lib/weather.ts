@@ -47,3 +47,32 @@ export async function loadCachedWeather() {
     return null
   }
 }
+
+export async function saveOfflineWeather(name = 'offline_weather') {
+  try {
+    const last = await loadItem('last_weather')
+    if (!last) return false
+    await saveItem(name, last.data)
+    return true
+  } catch (e) {
+    return false
+  }
+}
+
+export async function loadOfflineWeather(name = 'offline_weather') {
+  try {
+    const v = await loadItem(name)
+    return v || null
+  } catch (e) {
+    return null
+  }
+}
+
+export async function clearOfflineWeather(name = 'offline_weather') {
+  try {
+    await saveItem(name, null)
+    return true
+  } catch (e) {
+    return false
+  }
+}
