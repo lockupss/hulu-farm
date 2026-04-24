@@ -1,20 +1,39 @@
+import React, { useEffect, useState } from 'react'
 import CardUI from '@/components/ui/Card'
 import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import React from 'react'
 import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { getJSON } from '@/lib/api'
 import marketData from '../../data/market.json'
 
 export default function Market() {
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
+  const [loading, setLoading] = useState(true)
+  const [market, setMarket] = useState<any[]>(marketData)
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const m = await getJSON('/api/market')
+        setMarket(m)
+      } catch (e) {
+        console.warn('Failed to fetch market', e)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}><Text style={[styles.title, { color: colors.text }]}>Market Price Updates</Text></View>
-      <FlatList
-        data={marketData}
+      {loading ? (
+        <View style={{ padding: 16 }}><Text>Loading...</Text></View>
+      ) : (
+        <FlatList
+        data={market}
         keyExtractor={(i) => i.name}
         contentContainerStyle={{ padding: 16 }}
         renderItem={({ item }) => (
@@ -25,7 +44,8 @@ export default function Market() {
             <View style={styles.row}><Text style={styles.price}>{item.price}</Text><Text style={styles.change}>{item.change}</Text></View>
           </CardUI>
         )}
-      />
+        />
+      )}
     </View>
   )
 }
