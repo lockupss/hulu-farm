@@ -3,7 +3,8 @@ import CardUI from '@/components/ui/Card'
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import { ActivityIndicator, FlatList, PermissionsAndroid, Platform, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, PermissionsAndroid, Platform, StyleSheet, Text, View, TouchableOpacity } from 'react-native'
+import HelpModal from '@/components/help-modal'
 import { fetchWeather, loadCachedWeather } from '@/lib/weather'
 import Sparkline from '@/components/sparkline'
 import { saveOfflineWeather, loadOfflineWeather, clearOfflineWeather } from '@/lib/weather'
@@ -15,6 +16,7 @@ export default function Weather() {
   const [weather, setWeather] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [offlineAvailable, setOfflineAvailable] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const geoWatchIdRef = useRef<number | null>(null)
   const locWatchRemoverRef = useRef<(() => void) | null>(null)
 
@@ -178,11 +180,20 @@ export default function Weather() {
                   <View style={{ marginLeft: 12 }}>
                     <Text style={{ color: '#6b7280' }}>Actions</Text>
                     <View style={{ marginTop: 8 }}>
-                      <Text onPress={async () => { setLoading(true); try { const w = await fetchWeather(item.data.current_weather.latitude, item.data.current_weather.longitude); setWeather(w); } catch (e) { setError('Failed to refresh') } finally { setLoading(false) } }} style={{ color: colors.tint, marginBottom: 8 }}>Refresh</Text>
-                      {offlineAvailable ? (
-                        <Text onPress={async () => { const off = await loadOfflineWeather(); if (off) setWeather(off); }} style={{ color: colors.tint, marginBottom: 8 }}>Use Offline</Text>
-                      ) : null}
-                      <Text onPress={async () => { const ok = await saveOfflineWeather(); if (ok) setOfflineAvailable(true) }} style={{ color: colors.tint }}>Save for offline</Text>
+                        <TouchableOpacity onPress={async () => { setLoading(true); try { const w = await fetchWeather(item.data.current_weather.latitude, item.data.current_weather.longitude); setWeather(w); } catch (e) { setError('Failed to refresh') } finally { setLoading(false) } }} style={{ marginBottom: 8 }}>
+                          <Text style={{ color: colors.tint, fontWeight: '700' }}>Refresh</Text>
+                        </TouchableOpacity>
+                        {offlineAvailable ? (
+                          <TouchableOpacity onPress={async () => { const off = await loadOfflineWeather(); if (off) setWeather(off); }} style={{ marginBottom: 8 }}>
+                            <Text style={{ color: colors.tint, fontWeight: '700' }}>Use Offline</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        <TouchableOpacity onPress={async () => { const ok = await saveOfflineWeather(); if (ok) setOfflineAvailable(true) }}>
+                          <Text style={{ color: colors.tint, fontWeight: '700' }}>Save for offline</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setHelpOpen(true)} style={{ marginTop: 8 }}>
+                          <Text style={{ color: colors.tint }}>What is offline?</Text>
+                        </TouchableOpacity>
                     </View>
                   </View>
                 </View>
@@ -232,9 +243,13 @@ export default function Weather() {
             </View>
         </View>
       </CardUI>
+      {helpOpen && <HelpModal visible={helpOpen} onClose={() => setHelpOpen(false)} />}
     </View>
   )
 }
+
+// render HelpModal sibling
+// Help modal is rendered inside the main Weather component
 
 function getEmojiForWeather(code: number | undefined) {
   if (code == null) return '❓'
