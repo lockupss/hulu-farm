@@ -1,5 +1,5 @@
 import React from 'react'
-import { TextInput, StyleSheet } from 'react-native'
+import { StyleSheet, TextInput } from 'react-native'
 
 export const Input = (props: any) => {
   return <TextInput style={[styles.input, props.style]} placeholderTextColor="#9ca3af" {...props} />

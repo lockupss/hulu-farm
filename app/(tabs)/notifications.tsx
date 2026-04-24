@@ -1,9 +1,9 @@
-import React from 'react'
-import { View, Text, StyleSheet, FlatList } from 'react-native'
-import notifications from '../../data/notifications.json'
-import Card from '@/components/ui/Card'
+import CardUI from '@/components/ui/Card'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import React from 'react'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
+import notifications from '../../data/notifications.json'
 
 export default function Notifications() {
   const colorScheme = useColorScheme()
@@ -17,10 +17,10 @@ export default function Notifications() {
         keyExtractor={(i) => String(i.id)}
         contentContainerStyle={{ padding: 16 }}
         renderItem={({ item }) => (
-          <Card>
+          <CardUI>
             <Text>{item.text}</Text>
             <Text style={styles.time}>{item.time}</Text>
-          </Card>
+          </CardUI>
         )}
       />
     </View>

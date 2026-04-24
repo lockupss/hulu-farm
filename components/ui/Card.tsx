@@ -1,10 +1,11 @@
-import React from 'react'
-import { View, StyleSheet } from 'react-native'
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 
-export const Card = ({ children, style, variant }: { children: React.ReactNode; style?: any; variant?: 'default' | 'alert' | 'info' }) => {
+const Card = ({ children, style, variant }: { children: React.ReactNode; style?: any; variant?: 'default' | 'alert' | 'info' }) => {
   const variantStyle = variant === 'alert' ? styles.alert : variant === 'info' ? styles.info : null
   return <View style={[styles.card, variantStyle, style]}>{children}</View>
 }
+
 
 const styles = StyleSheet.create({
   card: {

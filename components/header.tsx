@@ -1,11 +1,15 @@
-import React from 'react'
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native'
 import { Colors } from '@/constants/theme'
-import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useColorScheme, useSetColorScheme } from '@/hooks/use-color-scheme'
+import React from 'react'
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 
 export default function Header() {
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
+
+  const setScheme = useSetColorScheme()
+
+  const toggle = () => setScheme(colorScheme === 'dark' ? 'light' : 'dark')
 
   return (
     <View style={[styles.container, { backgroundColor: colors.tint }] }>
@@ -13,10 +17,15 @@ export default function Header() {
         <Image source={require('@/assets/images/partial-react-logo.png')} style={styles.logo} />
         <Text style={[styles.title, { color: '#fff' }]}>HuluFarm</Text>
       </View>
-      <TouchableOpacity style={styles.bell} accessibilityLabel="Notifications">
-        <Text style={{ color: '#fff', fontSize: 18 }}>🔔</Text>
-        <View style={styles.dot} />
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <TouchableOpacity onPress={toggle} style={{ marginRight: 12 }} accessibilityLabel="Toggle theme">
+          <Text style={{ color: '#fff' }}>{colorScheme === 'dark' ? '🌙' : '☀️'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.bell} accessibilityLabel="Notifications">
+          <Text style={{ color: '#fff', fontSize: 18 }}>🔔</Text>
+          <View style={styles.dot} />
+        </TouchableOpacity>
+      </View>
     </View>
   )
 }

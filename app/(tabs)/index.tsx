@@ -1,9 +1,9 @@
-import React from 'react'
-import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import Card from '@/components/ui/Card'
+import CardUI from '@/components/ui/Card'
 import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import React from 'react'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
 export default function Home() {
   const colorScheme = useColorScheme()
@@ -21,41 +21,41 @@ export default function Home() {
       </View>
 
       <View style={styles.statsGrid}>
-        <Card>
+  <CardUI>
           <CardHeader>
             <CardTitle>Temperature</CardTitle>
           </CardHeader>
           <Text style={styles.big}>28°C</Text>
           <Text style={styles.muted}>Partly cloudy</Text>
-        </Card>
+  </CardUI>
 
-        <Card>
+  <CardUI>
           <CardHeader>
             <CardTitle>Humidity</CardTitle>
           </CardHeader>
           <Text style={styles.big}>65%</Text>
           <Text style={styles.muted}>Optimal for growth</Text>
-        </Card>
+  </CardUI>
 
-        <Card>
+  <CardUI>
           <CardHeader>
             <CardTitle>Maize Price</CardTitle>
           </CardHeader>
           <Text style={styles.big}>2,450 Br</Text>
           <Text style={styles.muted}>+5% this week</Text>
-        </Card>
+  </CardUI>
 
-        <Card>
+  <CardUI>
           <CardHeader>
             <CardTitle>Active Farmers</CardTitle>
           </CardHeader>
           <Text style={styles.big}>12.5K</Text>
           <Text style={styles.muted}>On the platform</Text>
-        </Card>
+  </CardUI>
       </View>
 
       <View style={styles.featureGrid}>
-        <Card>
+  <CardUI>
           <CardHeader>
             <CardTitle>Recent Weather Alerts</CardTitle>
           </CardHeader>
@@ -75,9 +75,9 @@ export default function Home() {
               <View style={styles.tagSecondary}><Text style={{ color: '#6b7280' }}>Info</Text></View>
             </View>
           </View>
-        </Card>
+  </CardUI>
 
-        <Card>
+  <CardUI>
           <CardHeader>
             <CardTitle>Market Price Updates</CardTitle>
           </CardHeader>
@@ -87,7 +87,7 @@ export default function Home() {
             <View style={styles.rowItemBetween}><Text>Teff</Text><Text style={{ fontWeight: '700' }}>5,200 Br <Text style={{ color: 'red' }}>↓3%</Text></Text></View>
             <View style={styles.rowItemBetween}><Text>Beans</Text><Text style={{ fontWeight: '700' }}>4,800 Br <Text style={{ color: 'green' }}>↑1%</Text></Text></View>
           </View>
-        </Card>
+  </CardUI>
       </View>
 
     </ScrollView>

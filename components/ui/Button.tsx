@@ -1,5 +1,5 @@
 import React from 'react'
-import { TouchableOpacity, Text, StyleSheet } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity } from 'react-native'
 
 export const Button = ({ children, onPress, variant = 'default', style }: any) => {
   const btnStyle = [styles.button, variant === 'outline' ? styles.outline : null, style]

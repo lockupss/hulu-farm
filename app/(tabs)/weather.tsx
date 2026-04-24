@@ -1,10 +1,10 @@
-import React from 'react'
-import { View, Text, StyleSheet, FlatList } from 'react-native'
-import weatherData from '../../data/weather.json'
-import Card from '@/components/ui/Card'
-import { CardHeader, CardTitle, CardDescription } from '@/components/ui/card-header'
+import CardUI from '@/components/ui/Card'
+import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import React from 'react'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
+import weatherData from '../../data/weather.json'
 
 export default function Weather() {
   const colorScheme = useColorScheme()
@@ -21,7 +21,7 @@ export default function Weather() {
         data={[1]}
         keyExtractor={() => 'current'}
         renderItem={() => (
-          <Card style={{ margin: 16 }}>
+          <CardUI style={{ margin: 16 }}>
             <CardHeader>
               <CardTitle>Current Weather</CardTitle>
             </CardHeader>
@@ -47,11 +47,11 @@ export default function Weather() {
                 <View style={styles.metric}><Text style={styles.metricLabel}>Pressure</Text><Text style={styles.metricValue}>1013 mb</Text></View>
               </View>
             </View>
-          </Card>
+          </CardUI>
         )}
       />
 
-      <Card style={{ margin: 16 }}>
+  <CardUI style={{ margin: 16 }}>
         <CardHeader>
           <CardTitle>Active Alerts</CardTitle>
         </CardHeader>
@@ -63,9 +63,9 @@ export default function Weather() {
             </View>
           ))}
         </View>
-      </Card>
+  </CardUI>
 
-      <Card style={{ margin: 16 }}>
+  <CardUI style={{ margin: 16 }}>
         <CardHeader>
           <CardTitle>7-Day Weather Forecast</CardTitle>
           <CardDescription>Hyper-localized predictions for your farm location</CardDescription>
@@ -82,7 +82,7 @@ export default function Weather() {
             ))}
           </View>
         </View>
-      </Card>
+  </CardUI>
     </View>
   )
 }

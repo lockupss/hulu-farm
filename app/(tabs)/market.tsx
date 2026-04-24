@@ -1,10 +1,10 @@
-import React from 'react'
-import { View, Text, StyleSheet, FlatList } from 'react-native'
-import marketData from '../../data/market.json'
-import Card from '@/components/ui/Card'
+import CardUI from '@/components/ui/Card'
 import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import React from 'react'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
+import marketData from '../../data/market.json'
 
 export default function Market() {
   const colorScheme = useColorScheme()
@@ -18,12 +18,12 @@ export default function Market() {
         keyExtractor={(i) => i.name}
         contentContainerStyle={{ padding: 16 }}
         renderItem={({ item }) => (
-          <Card>
+          <CardUI>
             <CardHeader>
               <CardTitle>{item.name}</CardTitle>
             </CardHeader>
             <View style={styles.row}><Text style={styles.price}>{item.price}</Text><Text style={styles.change}>{item.change}</Text></View>
-          </Card>
+          </CardUI>
         )}
       />
     </View>

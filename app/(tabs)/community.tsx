@@ -1,14 +1,13 @@
-import React from 'react'
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native'
-import { useRouter } from 'expo-router'
-import forumData from '../../data/forum.json'
-import Card from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { useColorScheme } from '@/hooks/use-color-scheme'
-import { Colors } from '@/constants/theme'
 import React, { useEffect, useState } from 'react'
-import { saveItem, loadItem } from '@/lib/storage'
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+// useRouter removed (unused) to satisfy linter
+import { Button } from '@/components/ui/Button'
+import CardUI from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
+import { Colors } from '@/constants/theme'
+import { useColorScheme } from '@/hooks/use-color-scheme'
+import { loadItem, saveItem } from '@/lib/storage'
+import forumData from '../../data/forum.json'
 
 function DiscussionItem({ item }: { item: any }) {
   return (
@@ -63,7 +62,7 @@ export default function Community() {
   <Text style={[styles.headerSubtitle, { color: muted }]}>Connect with farmers and share experiences</Text>
       </View>
 
-      <Card style={{ marginHorizontal: 16 }}>
+  <CardUI style={{ marginHorizontal: 16 }}>
         <Input placeholder="What's on your mind?" value={text} onChangeText={setText} />
         <View style={{ flexDirection: 'row', marginTop: 10 }}>
           <Button style={{ flex: 1, marginRight: 8 }} onPress={handlePost}>
@@ -73,15 +72,15 @@ export default function Community() {
             Ask a Question
           </Button>
         </View>
-      </Card>
+  </CardUI>
 
       <FlatList
         data={posts}
         keyExtractor={(i) => String(i.id)}
         renderItem={({ item }) => (
-          <Card style={{ marginHorizontal: 16 }}>
+          <CardUI style={{ marginHorizontal: 16 }}>
             <DiscussionItem item={item} />
-          </Card>
+          </CardUI>
         )}
         contentContainerStyle={{ paddingVertical: 16 }}
       />
