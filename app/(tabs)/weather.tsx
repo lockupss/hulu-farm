@@ -6,6 +6,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme'
 import { ActivityIndicator, FlatList, PermissionsAndroid, Platform, StyleSheet, Text, View, TouchableOpacity } from 'react-native'
 import HelpModal from '@/components/help-modal'
 import { fetchWeather, loadCachedWeather } from '@/lib/weather'
+import { loadItem, saveItem } from '@/lib/storage'
 import Sparkline from '@/components/sparkline'
 import { saveOfflineWeather, loadOfflineWeather, clearOfflineWeather } from '@/lib/weather'
 
@@ -28,6 +29,12 @@ export default function Weather() {
       if (cached && mounted) setWeather(cached)
       const off = await loadOfflineWeather()
       if (off && mounted) setOfflineAvailable(true)
+
+      // onboarding: show once
+      try {
+        const shown = await loadItem('weather_onboard_shown')
+        if (!shown && mounted) setHelpOpen(true)
+      } catch (e) {}
 
       // get location and subscribe to changes
       try {
@@ -243,7 +250,7 @@ export default function Weather() {
             </View>
         </View>
       </CardUI>
-      {helpOpen && <HelpModal visible={helpOpen} onClose={() => setHelpOpen(false)} />}
+  {helpOpen && <HelpModal visible={helpOpen} onClose={async () => { setHelpOpen(false); try { await saveItem('weather_onboard_shown', true) } catch (e) {} }} />}
     </View>
   )
 }
