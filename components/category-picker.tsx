@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native'
-import { Colors } from '@/constants/theme'
-import { useColorScheme } from '@/hooks/use-color-scheme'
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function CategoryPicker({ category, setCategory, options }: { category: string; setCategory: (c: string) => void; options?: string[] }) {
   const [open, setOpen] = useState(false)

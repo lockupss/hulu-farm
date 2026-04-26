@@ -1,4 +1,4 @@
-import { saveItem, loadItem } from './storage'
+import { loadItem, saveItem } from './storage'
 
 const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast'
 const REVERSE = 'https://geocoding-api.open-meteo.com/v1/reverse'

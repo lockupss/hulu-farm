@@ -1,0 +1,6 @@
+[
+  { "name": "Corn", "price": 180, "change": 1, "unit": "per bushel" },
+  { "name": "Wheat", "price": 700, "change": -2, "unit": "per bushel" },
+  { "name": "Soybeans", "price": 1200, "change": 3, "unit": "per bushel" },
+  { "name": "Barley", "price": 150, "change": -1, "unit": "per bushel" }
+]

@@ -1,16 +1,17 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 // useRouter removed (unused) to satisfy linter
+import CategoryPicker from '@/components/category-picker'
+import { useToast } from '@/components/toast'
 import { Button } from '@/components/ui/Button'
 import CardUI from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useTranslation } from '@/lib/i18n'
+import { getJSON, postJSON } from '@/lib/api'
 import { loadItem, saveItem } from '@/lib/storage'
 import forumData from '../../data/forum.json'
-import { getJSON, postJSON } from '@/lib/api'
-import { useToast } from '@/components/toast'
-import CategoryPicker from '@/components/category-picker'
 
 function normalizePost(p: any) {
   const post = { ...p }
@@ -25,27 +26,47 @@ function normalizePost(p: any) {
   return post
 }
 
+function formatTime(t: any) {
+  try {
+     const date = new Date(t)
+     const diff = Date.now() - date.getTime()
+     const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'Just now'
+    if (mins < 60) return `${mins}m`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h`
+    const days = Math.floor(hrs / 24)
+    return `${days}d`
+  } catch { return String(t) }
+}
+
 function ReplyView({ reply, onReply, onLike }: { reply: any; onReply: (parentId: number, text: string, parentReplyId?: number) => void; onLike: (postId: number, replyId?: number) => void }) {
+  const { t } = useTranslation()
   const [replying, setReplying] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [collapsed, setCollapsed] = useState(true)
   return (
     <View style={{ marginTop: 8, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
-      <Text style={{ fontSize: 13, fontWeight: '600' }}>{reply.author} • {reply.time}</Text>
+      <Text style={{ fontSize: 13, fontWeight: '600' }}>{reply.author} • {formatTime(reply.time)}</Text>
       <Text style={{ marginTop: 4 }}>{reply.text}</Text>
+      {reply.attachments?.map((a: any) => (
+        <TouchableOpacity key={a.url} onPress={() => { /* noop */ }}>
+          <Text style={{ color: '#0366d6', marginTop: 6 }}>{a.name || a.url}</Text>
+        </TouchableOpacity>
+      ))}
       <View style={{ flexDirection: 'row', marginTop: 6, alignItems: 'center' }}>
         <TouchableOpacity onPress={() => setReplying(!replying)}><Text style={styles.action}>💬 {reply.replies?.length ?? 0}</Text></TouchableOpacity>
         <LikeButton liked={!!reply.liked} count={reply.likes ?? 0} onPress={() => onLike(Number(reply.postId || reply.parentPostId), Number(reply.id))} />
       </View>
       {replying && (
         <View style={{ marginTop: 8 }}>
-          <Input placeholder="Reply to reply..." value={replyText} onChangeText={setReplyText} />
+          <Input placeholder={t('reply_to_reply') || 'Reply to reply...'} value={replyText} onChangeText={setReplyText} />
           <View style={{ flexDirection: 'row', marginTop: 8 }}>
-            <Button style={{ flex: 1, marginRight: 8 }} onPress={async () => { if (replyText.trim()) { await onReply(Number(reply.postId || reply.parentPostId), replyText, Number(reply.id)); setReplyText(''); setReplying(false) } }}>
-              Reply
+              <Button style={{ flex: 1, marginRight: 8 }} onPress={async () => { if (replyText.trim()) { await onReply(Number(reply.postId || reply.parentPostId), replyText, Number(reply.id)); setReplyText(''); setReplying(false) } }}>
+              {t('reply')}
             </Button>
             <Button variant="outline" style={{ flex: 1 }} onPress={() => { setReplyText(''); setReplying(false) }}>
-              Cancel
+              {t('cancel')}
             </Button>
           </View>
         </View>
@@ -54,13 +75,14 @@ function ReplyView({ reply, onReply, onLike }: { reply: any; onReply: (parentId:
         <ReplyView key={r.id} reply={{ ...r, postId: reply.postId || reply.parentPostId }} onReply={onReply} onLike={onLike} />
       ))}
       <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={{ marginTop: 6 }}>
-        <Text style={{ color: '#0366d6' }}>{collapsed ? 'Show replies' : 'Hide replies'}</Text>
+        <Text style={{ color: '#0366d6' }}>{collapsed ? t('show_replies') : t('hide_replies')}</Text>
       </TouchableOpacity>
     </View>
   )
 }
 
 function DiscussionItem({ item, onReply, onLike }: { item: any; onReply: (id: number, text: string, parentReplyId?: number) => void; onLike: (id: number, replyId?: number) => void }) {
+  const { t } = useTranslation()
   const [replying, setReplying] = useState(false)
   const [replyText, setReplyText] = useState('')
 
@@ -73,21 +95,26 @@ function DiscussionItem({ item, onReply, onLike }: { item: any; onReply: (id: nu
             <Text style={styles.title}>{item.title || item.text?.slice(0, 30)}</Text>
             <View style={styles.category}><Text style={styles.categoryText}>{item.category}</Text></View>
           </View>
-          <Text style={styles.meta}>{item.author} • {item.time}</Text>
+          <Text style={styles.meta}>{item.author} • {formatTime(item.time)}</Text>
           <Text style={styles.body}>{item.content || item.text}</Text>
+          {item.attachments?.map((a: any) => (
+            <TouchableOpacity key={a.url} onPress={() => { /* noop */ }}>
+              <Text style={{ color: '#0366d6', marginTop: 6 }}>{a.name || a.url}</Text>
+            </TouchableOpacity>
+          ))}
           <View style={styles.actionsRow}>
             <TouchableOpacity onPress={() => setReplying(!replying)}><Text style={styles.action}>💬 {item.replies?.length ?? 0} replies</Text></TouchableOpacity>
             <LikeButton liked={!!item.liked} count={item.likes ?? 0} onPress={() => onLike(Number(item.id))} />
           </View>
           {replying && (
-            <View style={{ marginTop: 8 }}>
-              <Input placeholder="Write a reply..." value={replyText} onChangeText={setReplyText} />
+              <View style={{ marginTop: 8 }}>
+              <Input placeholder={t('write_reply') || 'Write a reply...'} value={replyText} onChangeText={setReplyText} />
               <View style={{ flexDirection: 'row', marginTop: 8 }}>
                 <Button style={{ flex: 1, marginRight: 8 }} onPress={async () => { if (replyText.trim()) { await onReply(Number(item.id), replyText); setReplyText(''); setReplying(false) } }}>
-                  Reply
+                  {t('reply')}
                 </Button>
                 <Button variant="outline" style={{ flex: 1 }} onPress={() => { setReplyText(''); setReplying(false) }}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
               </View>
             </View>
@@ -137,10 +164,12 @@ function LikeButton({ liked, count, onPress }: { liked: boolean; count: number; 
 export default function Community() {
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
+  const { t } = useTranslation()
   const muted = colorScheme === 'dark' ? '#9CA3AF' : '#6B7280'
   const { showToast } = useToast()
   const [posts, setPosts] = useState<any[]>([])
   const [text, setText] = useState('')
+  const [attachments, setAttachments] = useState<any[]>([])
   const [category, setCategory] = useState('General')
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
@@ -151,15 +180,15 @@ export default function Community() {
       try {
         const remote = await getJSON('/api/forum')
         setPosts((remote || []).map((p: any) => normalizePost(p)))
-      } catch (err) {
-        console.warn('Failed to load forum, falling back to local', err)
+    } catch (_err) {
+      console.warn('Failed to load forum, falling back to local', _err)
         const stored = await loadItem('forum_posts')
         if (stored) setPosts((stored || []).map((p: any) => normalizePost(p)))
         else setPosts((forumData || []).map((p: any) => normalizePost(p)))
       } finally {
         setLoading(false)
       }
-    })()
+  })()
     ;(async () => {
       // ensure anonymous user id exists
       const existing = await loadItem('anon_user_id')
@@ -178,18 +207,26 @@ export default function Community() {
 
   const handlePost = async () => {
     if (!text.trim()) return
-    const newPost = { id: Date.now(), author: 'You', title: text.slice(0, 30), content: text, replies: [], likes: 0, time: 'Just now', category }
+    const timestamp = Date.now()
+    const nowISO = new Date().toISOString()
+    const newPost: any = { id: timestamp, author: 'You', title: text.slice(0, 30), content: text, replies: [], likes: 0, time: nowISO, timestamp, category }
+    if (attachments.length) newPost.attachments = attachments
     const next = [newPost, ...posts]
     setPosts(next)
     await saveItem('forum_posts', next)
     // send to server
     try {
+      // if attachments include local file data, ensure they are base64 encoded objects
       await postJSON('/api/forum', newPost)
-    } catch (e) {
-      console.warn('Failed to post remotely', e)
+    } catch {
+      console.warn('Failed to post remotely')
     }
     setText('')
+    setAttachments([])
   }
+
+  // Attachment picking disabled in this build (unused). Install expo-image-picker
+  // to enable native file attachments when needed.
 
   const likePost = async (postId: number, replyId?: number) => {
     // optimistic update: toggle local state first
@@ -268,7 +305,7 @@ export default function Community() {
       await saveItem('liked_ids', finalLiked)
       showToast(liked ? 'Liked' : 'Unliked', 'success')
       await saveItem('forum_posts', reconciled)
-    } catch (e) {
+    } catch {
       // rollback
       setPosts(prevPosts)
       const rolledBack = { ...likedIds }
@@ -276,12 +313,12 @@ export default function Community() {
       setLikedIds(rolledBack)
       await saveItem('liked_ids', rolledBack)
       showToast('Failed to update like. Please try again.', 'error')
-      console.warn('like failed', e)
+      console.warn('like failed')
     }
   }
 
   const replyToPost = async (id: number, replyText: string) => {
-    const reply = { id: Date.now(), author: 'You', text: replyText, time: 'Just now' }
+    const reply = { id: Date.now(), author: 'You', text: replyText, time: new Date().toISOString(), timestamp: Date.now(), attachments: [] }
     try {
       await postJSON(`/api/forum/${id}/reply`, reply)
       showToast('Reply posted', 'success')
@@ -294,6 +331,8 @@ export default function Community() {
     await saveItem('forum_posts', next)
   }
 
+  
+
   // derive categories from posts + defaults
   const defaultCategories = ['General', 'Disease Management', 'Market Trends', 'Weather Preparation']
   const derived = Array.from(new Set([...(posts || []).map(p => p.category).filter(Boolean), ...defaultCategories]))
@@ -301,21 +340,21 @@ export default function Community() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }] }>
       <View style={styles.header}>
-  <Text style={[styles.headerTitle, { color: colors.text }]}>Forum</Text>
-  <Text style={[styles.headerSubtitle, { color: muted }]}>Connect with farmers and share experiences</Text>
+  <Text style={[styles.headerTitle, { color: colors.text }]}>{t('forum')}</Text>
+  <Text style={[styles.headerSubtitle, { color: muted }]}>{t('forum_sub')}</Text>
       </View>
 
   <CardUI style={{ marginHorizontal: 16 }}>
-        <Input placeholder="What's on your mind?" value={text} onChangeText={setText} />
+          <Input placeholder={t('whats_on_your_mind')} value={text} onChangeText={setText} />
         <View style={{ flexDirection: 'row', marginTop: 10, alignItems: 'center' }}>
-          <Button style={{ flex: 1, marginRight: 8 }} onPress={handlePost}>
-            Post Discussion
+            <Button style={{ flex: 1, marginRight: 8 }} onPress={handlePost}>
+            {t('post_discussion')}
           </Button>
           <CategoryPicker category={category} setCategory={setCategory} options={derived} />
         </View>
   </CardUI>
       {loading ? (
-        <View style={{ padding: 16 }}><Text>Loading...</Text></View>
+        <View style={{ padding: 16 }}><Text>{t('loading')}</Text></View>
       ) : (
         <FlatList
           data={posts}

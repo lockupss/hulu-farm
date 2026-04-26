@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
-import { Animated, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import React, { createContext, useCallback, useContext, useState } from 'react'
+import { Animated, StyleSheet, Text, View } from 'react-native'
 
 type ToastType = 'info' | 'success' | 'error'
 
@@ -11,7 +11,14 @@ const ToastContext = createContext<{ showToast: (message: string, type?: ToastTy
 
 export function useToast() {
   const ctx = useContext(ToastContext)
-  if (!ctx) throw new Error('useToast must be used within a ToastProvider')
+  if (!ctx) {
+    // Provide a safe fallback so components can call showToast outside of a provider
+    return { showToast: (message: string, type: ToastType = 'info') => {
+      // Fallback logs so calls are no-ops in environments without a provider
+      // Keep this deterministic and side-effect-light for tests/dev
+        console.log('[toast fallback]', type, message)
+    } }
+  }
   return ctx
 }
 
@@ -40,11 +47,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ToastCard({ toast, colors }: { toast: Toast; colors: any }) {
-  const opacity = new Animated.Value(0)
+  const opacityRef = React.useRef(new Animated.Value(0))
+  const opacity = opacityRef.current
   React.useEffect(() => {
     Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start()
     return () => { /* noop */ }
-  }, [])
+  }, [opacity])
   const background = toast.type === 'error' ? '#FEF2F2' : toast.type === 'success' ? '#ECFDF5' : '#F0F9FF'
   const border = toast.type === 'error' ? '#FCA5A5' : toast.type === 'success' ? '#34D399' : '#60A5FA'
   return (

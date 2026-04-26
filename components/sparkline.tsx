@@ -1,6 +1,6 @@
-import React from 'react'
-import { View } from 'react-native'
-import Svg, { Polyline, Rect } from 'react-native-svg'
+import React from 'react';
+import { View } from 'react-native';
+import Svg, { Polyline, Rect } from 'react-native-svg';
 
 export default function Sparkline({ values, width = 160, height = 40, stroke = '#0a7ea4' }: { values: number[]; width?: number; height?: number; stroke?: string }) {
   if (!values || values.length === 0) return <View />

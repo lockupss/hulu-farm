@@ -1,25 +1,35 @@
-import { useEffect, useState } from 'react';
-import { useColorScheme as useRNColorScheme } from 'react-native';
+import React, { useEffect, useState, createContext, useContext } from 'react'
+import { useColorScheme as useRNColorScheme, Appearance, ColorSchemeName } from 'react-native'
 
-// Re-export ThemeProvider and useSetColorScheme from the native hook implementation so
-// platform-specific resolution still provides the same named exports used across the app.
-export { ThemeProvider, useSetColorScheme } from './use-color-scheme'
+type ThemeContextType = { scheme: ColorSchemeName; setScheme: (s: ColorSchemeName) => void }
 
-/**
- * To support static rendering, this value needs to be re-calculated on the client side for web
- */
-export function useColorScheme() {
-  const [hasHydrated, setHasHydrated] = useState(false);
+const ThemeContext = createContext<ThemeContextType>({ scheme: (Appearance.getColorScheme() as ColorSchemeName) ?? 'light', setScheme: () => {} })
+
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [scheme, setScheme] = useState<ColorSchemeName>((Appearance.getColorScheme() as ColorSchemeName) ?? 'light')
 
   useEffect(() => {
-    setHasHydrated(true);
-  }, []);
+    const listener = ({ colorScheme }: { colorScheme: ColorSchemeName | null }) => {
+      if (colorScheme) setScheme(colorScheme)
+    }
+    const sub = Appearance.addChangeListener(listener)
+    return () => sub.remove()
+  }, [])
 
-  const colorScheme = useRNColorScheme();
-
-  if (hasHydrated) {
-    return colorScheme;
-  }
-
-  return 'light';
+  return React.createElement(ThemeContext.Provider, { value: { scheme, setScheme } }, children)
 }
+
+export function useColorScheme() {
+  const ctx = useContext(ThemeContext)
+  // If provider is not used, fallback to RN hook
+  if (!ctx) return useRNColorScheme() ?? 'light'
+  return ctx.scheme
+}
+
+export function useSetColorScheme() {
+  const ctx = useContext(ThemeContext)
+  if (!ctx) return (s: ColorSchemeName) => {}
+  return ctx.setScheme
+}
+
+export default useColorScheme

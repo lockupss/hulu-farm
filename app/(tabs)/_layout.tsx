@@ -5,9 +5,11 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTranslation } from '@/lib/i18n'
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { t } = useTranslation()
 
   return (
     <Tabs
@@ -19,7 +21,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('home'),
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
@@ -27,31 +29,32 @@ export default function TabLayout() {
       <Tabs.Screen
         name="weather"
         options={{
-          title: 'Weather',
+          title: t('weather'),
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="cloud.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="market"
         options={{
-          title: 'Market',
+          title: t('view_market'),
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: 'Alerts',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bell.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="community"
         options={{
-            title: 'Forum',
+            title: t('forum'),
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: t('alerts') || t('notifications_title'),
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bell.fill" color={color} />,
+        }}
+      />
+
     </Tabs>
   );
 }

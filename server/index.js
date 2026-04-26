@@ -93,7 +93,30 @@ const server = http.createServer((req, res) => {
       try {
         const payload = JSON.parse(body)
         // normalize post shape for persistence
-        const post = Object.assign({ replies: [], likes: 0, liked_by: [], category: 'General' }, payload)
+  const post = Object.assign({ replies: [], likes: 0, liked_by: [], category: 'General' }, payload)
+  // ensure time fields
+  post.time = post.time || new Date().toISOString()
+  post.timestamp = post.timestamp || Date.now()
+        // handle attachments if present: write base64 blobs to data/uploads
+        if (Array.isArray(post.attachments) && post.attachments.length) {
+          const uploadsDir = path.join(DATA_DIR, 'uploads')
+          if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+          post.attachments = post.attachments.map(a => {
+            try {
+              if (a.data && a.name) {
+                const name = `${Date.now()}-${a.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+                const p = path.join(uploadsDir, name)
+                const buf = Buffer.from(a.data, 'base64')
+                fs.writeFileSync(p, buf)
+                // return a public static path
+                return { name: a.name, url: `/static/uploads/${name}`, mime: a.mime || null }
+              }
+            } catch (e) {
+              console.error('attachment write error', e)
+            }
+            return null
+          }).filter(Boolean)
+        }
         const existing = readJSON('forum_posts.json') || []
         // avoid duplicate post ids: if exists, replace, else prepend
         const idx = existing.findIndex(p => String(p.id) === String(post.id))
@@ -143,6 +166,24 @@ const server = http.createServer((req, res) => {
         }
   posts[idx].replies = posts[idx].replies || []
         // support nested replies: payload may include parentReplyId
+        // handle attachments for replies as well
+        if (Array.isArray(payload.attachments) && payload.attachments.length) {
+          const uploadsDir = path.join(DATA_DIR, 'uploads')
+          if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
+          payload.attachments = payload.attachments.map(a => {
+            try {
+              if (a.data && a.name) {
+                const name = `${Date.now()}-${a.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+                const p = path.join(uploadsDir, name)
+                const buf = Buffer.from(a.data, 'base64')
+                fs.writeFileSync(p, buf)
+                return { name: a.name, url: `/static/uploads/${name}`, mime: a.mime || null }
+              }
+            } catch (e) { console.error('attachment write error', e) }
+            return null
+          }).filter(Boolean)
+        }
+
         if (payload.parentReplyId) {
           // find the parent reply and push into its replies array
           const parentId = Number(payload.parentReplyId)
@@ -160,7 +201,9 @@ const server = http.createServer((req, res) => {
             if (parent) {
             parent.replies = parent.replies || []
             // ensure reply has postId and liked_by
-            payload.postId = id
+      payload.postId = id
+      payload.time = payload.time || new Date().toISOString()
+      payload.timestamp = payload.timestamp || Date.now()
             payload.liked_by = payload.liked_by || []
             payload.likes = payload.likes || payload.liked_by.length || 0
             parent.replies.unshift(payload)
@@ -324,22 +367,104 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/api/market') {
-    const data = readJSON('market.json') || {}
+    // Support optional country-specific market files.
+    // Query param: ?country=ET or ?country=Ethiopia
+    const country = url.searchParams.get('country') || null
+    const acceptLang = req.headers['accept-language'] || ''
+
+    // helper - try several candidate filenames for country
+    function tryMarketForCountry(c) {
+      if (!c) return null
+      const cand = []
+      const u = String(c)
+      // alpha-2 / alpha-3 and normalized
+      cand.push(`market.${u}.json`)
+      cand.push(`market_${u}.json`)
+      cand.push(`markets/${u}.json`)
+      cand.push(`markets/${u.toLowerCase()}.json`)
+      cand.push(`markets/${u.toUpperCase()}.json`)
+      // spaces/commas replaced
+      const slug = u.replace(/[^a-zA-Z0-9]/g, '_')
+      cand.push(`markets/${slug}.json`)
+      for (const f of cand) {
+        const v = readJSON(f)
+        if (v) return v
+      }
+      return null
+    }
+
+    // Prefer explicit ?country param
+    let result = null
+    if (country) result = tryMarketForCountry(country)
+
+    // fallback to accept-language first region (e.g., en-US -> US)
+    if (!result && acceptLang) {
+      const m = String(acceptLang).split(',')[0]
+      const parts = m.split('-')
+      if (parts.length > 1) result = tryMarketForCountry(parts[1])
+      if (!result) result = tryMarketForCountry(parts[0])
+    }
+
+    // final fallback to default market.json
+    if (!result) result = readJSON('market.json') || {}
+
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(data))
+    res.end(JSON.stringify(result))
     return
   }
 
   if (req.method === 'GET' && pathname === '/api/notifications') {
     const data = readJSON('notifications.json') || []
+    // optional prefs query param: URL-encoded JSON array or comma-separated list
+    const prefsRaw = url.searchParams.get('prefs') || ''
+    let enabledPrefs = []
+    try {
+      if (prefsRaw) {
+        if (prefsRaw.startsWith('[')) enabledPrefs = JSON.parse(prefsRaw)
+        else enabledPrefs = prefsRaw.split(',').map(s => decodeURIComponent(s).trim()).filter(Boolean)
+      }
+    } catch (e) {
+      enabledPrefs = []
+    }
+
+    // mapping of preference label to keywords to match in notification text/title/message
+    const prefKeywords = {
+      'Weather Alerts': ['weather', 'rain', 'flood', 'storm'],
+      'Price Updates': ['price', 'market', 'maize', 'wheat', 'teff', 'price'],
+      'Disease Alerts': ['disease', 'pest', 'blight', 'armyworm'],
+      'Community Posts': ['forum', 'community', 'post'],
+      'Farm Reminders': ['harvest', 'reminder', 'planting', 'schedule']
+    }
+
+    let filtered = data
+    if (enabledPrefs && enabledPrefs.length) {
+      // create keyword set from enabled prefs
+      const kws = new Set()
+      for (const p of enabledPrefs) {
+        const k = prefKeywords[p]
+        if (k && Array.isArray(k)) k.forEach(x => kws.add(x))
+      }
+      if (kws.size > 0) {
+        filtered = data.filter(n => {
+          const text = String(n.text || n.message || n.title || '').toLowerCase()
+          for (const kw of kws) if (text.includes(kw)) return true
+          return false
+        })
+      } else {
+        // If enabledPrefs provided but none matched known labels, fall back to empty
+        filtered = []
+      }
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(data))
+    res.end(JSON.stringify(filtered))
     return
   }
 
   // static serve small files (favicon or simple assets)
   if (req.method === 'GET' && pathname.startsWith('/static/')) {
     const filePath = path.join(DATA_DIR, pathname.replace('/static/', ''))
+    // special mapping: /static/uploads -> data/uploads
     if (fs.existsSync(filePath)) {
       const stream = fs.createReadStream(filePath)
       res.writeHead(200)

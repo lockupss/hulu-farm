@@ -2,75 +2,78 @@ import CardUI from '@/components/ui/Card'
 import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useTranslation } from '@/lib/i18n'
+import CommunityHighlight from '@/components/community-highlight'
 import React from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
 export default function Home() {
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
+  const { t } = useTranslation()
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.headerArea}>
-        <Text style={[styles.h1, { color: colors.text }]}>Welcome to HuluFarm</Text>
-        <Text style={styles.sub}>{'Your agricultural support platform for real-time insights and community guidance'}</Text>
+  <Text style={[styles.h1, { color: colors.text }]}>{t('welcome_title')}</Text>
+  <Text style={styles.sub}>{t('welcome_sub')}</Text>
       </View>
 
       <View style={styles.alertBox}>
-        <Text style={styles.alertText}>⚠️ Heavy rainfall expected in your region within 24 hours. Review your irrigation schedule.</Text>
+        <Text style={styles.alertText}>{t('heavy_rain_alert')}</Text>
       </View>
 
       <View style={styles.statsGrid}>
   <CardUI>
           <CardHeader>
-            <CardTitle>Temperature</CardTitle>
+            <CardTitle>{t('temperature')}</CardTitle>
           </CardHeader>
           <Text style={styles.big}>28°C</Text>
-          <Text style={styles.muted}>Partly cloudy</Text>
+    <Text style={styles.muted}>{t('partly_cloudy_label')}</Text>
   </CardUI>
 
   <CardUI>
           <CardHeader>
-            <CardTitle>Humidity</CardTitle>
+            <CardTitle>{t('humidity')}</CardTitle>
           </CardHeader>
           <Text style={styles.big}>65%</Text>
-          <Text style={styles.muted}>Optimal for growth</Text>
+    <Text style={styles.muted}>{t('optimal_for_growth_label')}</Text>
   </CardUI>
 
   <CardUI>
           <CardHeader>
-            <CardTitle>Maize Price</CardTitle>
+            <CardTitle>{t('maize_price')}</CardTitle>
           </CardHeader>
           <Text style={styles.big}>2,450 Br</Text>
-          <Text style={styles.muted}>+5% this week</Text>
+    <Text style={styles.muted}>{t('compared_to_last_week')}</Text>
   </CardUI>
 
   <CardUI>
           <CardHeader>
-            <CardTitle>Active Farmers</CardTitle>
+            <CardTitle>{t('active_farmers')}</CardTitle>
           </CardHeader>
           <Text style={styles.big}>12.5K</Text>
-          <Text style={styles.muted}>On the platform</Text>
+    <Text style={styles.muted}>{t('on_the_platform')}</Text>
   </CardUI>
       </View>
 
       <View style={styles.featureGrid}>
   <CardUI>
           <CardHeader>
-            <CardTitle>Recent Weather Alerts</CardTitle>
+            <CardTitle>{t('recent_weather_alerts')}</CardTitle>
           </CardHeader>
           <View style={{ paddingTop: 6 }}>
             <View style={styles.rowItem}>
               <View>
-                <Text style={styles.itemTitle}>Rainfall Warning</Text>
-                <Text style={styles.muted}>Heavy rains in 12 hours</Text>
+                <Text style={styles.itemTitle}>{t('rainfall_warning')}</Text>
+                <Text style={styles.muted}>{t('heavy_rain_alert')}</Text>
               </View>
               <View style={styles.tag}><Text style={{ color: '#0366d6' }}>Alert</Text></View>
             </View>
             <View style={styles.rowItem}>
               <View>
-                <Text style={styles.itemTitle}>Temperature Drop</Text>
-                <Text style={styles.muted}>Expected 5°C decrease</Text>
+                <Text style={styles.itemTitle}>{t('temp_drop')}</Text>
+                <Text style={styles.muted}>{t('expected_temp_drop').replace('{deg}', '5')}</Text>
               </View>
               <View style={styles.tagSecondary}><Text style={{ color: '#6b7280' }}>Info</Text></View>
             </View>
@@ -79,17 +82,20 @@ export default function Home() {
 
   <CardUI>
           <CardHeader>
-            <CardTitle>Market Price Updates</CardTitle>
+            <CardTitle>{t('market_price_updates')}</CardTitle>
           </CardHeader>
           <View style={{ paddingTop: 6 }}>
-            <View style={styles.rowItemBetween}><Text>Maize</Text><Text style={{ fontWeight: '700' }}>2,450 Br <Text style={{ color: 'green' }}>↑5%</Text></Text></View>
-            <View style={styles.rowItemBetween}><Text>Wheat</Text><Text style={{ fontWeight: '700' }}>3,100 Br <Text style={{ color: 'green' }}>↑2%</Text></Text></View>
-            <View style={styles.rowItemBetween}><Text>Teff</Text><Text style={{ fontWeight: '700' }}>5,200 Br <Text style={{ color: 'red' }}>↓3%</Text></Text></View>
-            <View style={styles.rowItemBetween}><Text>Beans</Text><Text style={{ fontWeight: '700' }}>4,800 Br <Text style={{ color: 'green' }}>↑1%</Text></Text></View>
+            <View style={styles.rowItemBetween}><Text>{t('commodity_maize')}</Text><Text style={{ fontWeight: '700' }}>2,450 Br <Text style={{ color: 'green' }}>↑5%</Text></Text></View>
+            <View style={styles.rowItemBetween}><Text>{t('commodity_wheat')}</Text><Text style={{ fontWeight: '700' }}>3,100 Br <Text style={{ color: 'green' }}>↑2%</Text></Text></View>
+            <View style={styles.rowItemBetween}><Text>{t('commodity_teff')}</Text><Text style={{ fontWeight: '700' }}>5,200 Br <Text style={{ color: 'red' }}>↓3%</Text></Text></View>
+            <View style={styles.rowItemBetween}><Text>{t('commodity_beans')}</Text><Text style={{ fontWeight: '700' }}>4,800 Br <Text style={{ color: 'green' }}>↑1%</Text></Text></View>
           </View>
   </CardUI>
       </View>
-
+      {/* Community highlight inserted below */}
+      <CardUI style={{ margin: 16 }}>
+        <CommunityHighlight />
+      </CardUI>
     </ScrollView>
   )
 }

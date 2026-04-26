@@ -1,21 +1,23 @@
-import React from 'react'
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { useColorScheme } from '@/hooks/use-color-scheme'
-import { Colors } from '@/constants/theme'
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import React from 'react';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from '@/lib/i18n'
 
 export default function HelpModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const scheme = useColorScheme()
   const colors = Colors[scheme ?? 'light']
+  const { t } = useTranslation()
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: colors.background }]}> 
-          <Text style={[styles.title, { color: colors.text }]}>Offline Weather — Quick Help</Text>
-          <Text style={[styles.body, { color: colors.text }]}>You can save the current weather data to your phone. This lets you view the last saved weather when you are out of mobile coverage.</Text>
-          <Text style={[styles.body, { color: colors.text }]}>To use: tap "Save for offline" when you have a connection. Later, tap "Use Offline" to view the saved snapshot.</Text>
-          <Text style={[styles.body, { color: colors.text }]}>Saved data is stored only on this device and can be cleared with the "Save for offline" button again.</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{t('offline_help_title')}</Text>
+          <Text style={[styles.body, { color: colors.text }]}>{t('offline_help_line1')}</Text>
+          <Text style={[styles.body, { color: colors.text }]}>{t('offline_help_line2')}</Text>
+          <Text style={[styles.body, { color: colors.text }]}>{t('offline_help_line3')}</Text>
           <TouchableOpacity onPress={onClose} style={[styles.button, { backgroundColor: colors.tint }]}> 
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Got it</Text>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>{t('got_it')}</Text>
           </TouchableOpacity>
         </View>
       </View>
