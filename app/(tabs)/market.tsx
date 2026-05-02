@@ -2,7 +2,8 @@ import CardUI from '@/components/ui/Card'
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card-header'
 import { useTranslation } from '@/lib/i18n'
 import React from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View, Dimensions } from 'react-native'
+import { useAppData } from '@/lib/app-data'
 
 export default function MarketPrices() {
   const pricesSeed = [
@@ -95,6 +96,15 @@ export default function MarketPrices() {
     })()
     return () => { mounted = false }
   }, [])
+
+  // If AppData provider has market data, use it as authoritative source
+  const { market: providerMarket } = useAppData()
+  React.useEffect(() => {
+    if (providerMarket && Array.isArray(providerMarket) && providerMarket.length) {
+      setPrices(providerMarket.map((it: any) => ({ name: it.name, price: typeof it.price === 'number' ? it.price : Number(String(it.price).replace(/[^0-9.-]+/g, '')) || 0, change: it.changePercent || (it.change || 0), unit: it.unit || 'unit' })))
+      setLoading(false)
+    }
+  }, [providerMarket])
 
   const avgChange = ((prices.reduce((s, p) => s + (Number(p.change) || 0), 0) / prices.length) || 0).toFixed(1)
 
@@ -223,7 +233,7 @@ const styles = StyleSheet.create({
   pillPositive: { backgroundColor: '#ECFDF5', color: '#065F46' },
   pillNegative: { backgroundColor: '#FEF2F2', color: '#7F1D1D' },
   predGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  predCard: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, width: '30%', marginBottom: 12 },
+  predCard: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, width: '30%', minWidth: 140, marginBottom: 12 },
   tinyMuted: { color: '#6b7280', fontSize: 12 },
   bar: { width: 6, borderRadius: 2, marginHorizontal: 2 },
 })
