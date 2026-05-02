@@ -1,10 +1,12 @@
 import React from 'react'
-import { StyleSheet, Text, TouchableOpacity } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, ActivityIndicator, View } from 'react-native'
 
-export const Button = ({ children, onPress, variant = 'default', style }: any) => {
+export const Button = ({ children, onPress, variant = 'default', style, disabled = false, loading = false, fullWidth = false }: any) => {
   const btnStyle = [
     styles.button,
     variant === 'outline' ? styles.outline : null,
+    fullWidth ? styles.fullWidth : null,
+    disabled ? styles.disabled : null,
     style,
   ]
 
@@ -16,10 +18,18 @@ export const Button = ({ children, onPress, variant = 'default', style }: any) =
   return (
     <TouchableOpacity
       style={btnStyle}
-      onPress={onPress}
+      onPress={disabled || loading ? undefined : onPress}
       activeOpacity={0.85}
+      accessibilityState={{ disabled }}
     >
-      <Text style={textStyle}>{children}</Text>
+      {loading ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ActivityIndicator color={variant === 'outline' ? '#111827' : '#fff'} style={{ marginRight: 8 }} />
+          <Text style={textStyle}>{children}</Text>
+        </View>
+      ) : (
+        <Text style={textStyle}>{children}</Text>
+      )}
     </TouchableOpacity>
   )
 }
@@ -39,6 +49,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+
+  fullWidth: { alignSelf: 'stretch' },
+
+  disabled: { opacity: 0.6 },
 
   outline: {
     backgroundColor: '#ffffff', // cleaner than transparent

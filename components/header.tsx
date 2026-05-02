@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme'
 import { useColorScheme, useSetColorScheme } from '@/hooks/use-color-scheme'
 import React from 'react'
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Image, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native'
 
 export default function Header() {
   const colorScheme = useColorScheme()
@@ -21,18 +21,23 @@ export default function Header() {
     logoSource = null
   }
 
+  const { width } = Dimensions.get('window')
+  const compact = width < 360
+
   return (
     <View style={[styles.container, { backgroundColor: colors.tint }] }>
       <View style={styles.left}>
         {logoSource ? (
-          <Image source={logoSource} style={styles.logo} />
+          <Image source={logoSource} style={[styles.logo, compact ? styles.logoSmall : null]} />
         ) : (
-          <View style={[styles.logoFallback, { backgroundColor: colors.background }] }>
-            <Text style={{ fontSize: 18 }}>🌾</Text>
+          <View style={[styles.logoFallback, { backgroundColor: colors.background }, compact ? styles.logoSmall : null] }>
+            <Text style={{ fontSize: compact ? 14 : 18 }}>🌾</Text>
           </View>
         )}
-        <Text style={[styles.title, { color: '#fff' }]}>HuluFarm</Text>
-        <Text style={[styles.subtitle, { color: '#fff', marginLeft: 8 }]}>Tools for farmers</Text>
+        <View style={{ flexShrink: 1 }}>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.title, { color: '#fff' }]}>HuluFarm</Text>
+          {!compact && <Text style={[styles.subtitle, { color: '#fff', marginLeft: 0 }]}>Tools for farmers</Text>}
+        </View>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <TouchableOpacity onPress={toggle} style={{ marginRight: 12 }} accessibilityLabel="Toggle theme">
@@ -51,6 +56,7 @@ const styles = StyleSheet.create({
   container: { height: 64, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   left: { flexDirection: 'row', alignItems: 'center' },
   logo: { width: 36, height: 36, marginRight: 8 },
+  logoSmall: { width: 28, height: 28, marginRight: 8 },
   logoFallback: { width: 36, height: 36, marginRight: 8, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 16, fontWeight: '700' },
   subtitle: { fontSize: 12, opacity: 0.9 },
