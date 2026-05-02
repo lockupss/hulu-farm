@@ -1,8 +1,8 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTranslation } from '@/lib/i18n';
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useTranslation } from '@/lib/i18n'
 
 export default function HelpModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const scheme = useColorScheme()

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { fetchWeather, loadCachedWeather } from './weather'
 import { getJSON } from './api'
+import { loadCachedWeather } from './weather'
 
 type AppData = {
   weather: any | null

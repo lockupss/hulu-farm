@@ -1,5 +1,5 @@
-import React, { useEffect, useState, createContext, useContext } from 'react'
-import { useColorScheme as useRNColorScheme, Appearance, ColorSchemeName } from 'react-native'
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Appearance, ColorSchemeName, useColorScheme as useRNColorScheme } from 'react-native';
 
 type ThemeContextType = { scheme: ColorSchemeName; setScheme: (s: ColorSchemeName) => void }
 

@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, Image } from 'react-native'
-import { Input } from '@/components/ui/Input'
+import { useToast } from '@/components/toast'
 import { Button } from '@/components/ui/Button'
 import CardUI from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import { loadItem, saveItem } from '@/lib/storage'
-import { useToast } from '@/components/toast'
 import { useTranslation } from '@/lib/i18n'
+import { loadItem, saveItem } from '@/lib/storage'
+import React, { useEffect, useState } from 'react'
+import { Alert, Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native'
+import { Share } from 'react-native'
 
 export default function Settings() {
   const colorScheme = useColorScheme()
@@ -102,14 +103,17 @@ export default function Settings() {
   }
 
   const clearLocalData = async () => {
-    Alert.alert(t('clear_local_data_title') || 'Clear local data', t('clear_local_data_confirm') || 'This will remove local stored posts, likes, notifications and cached weather. This is irreversible on this device. Continue?', [
-      { text: t('cancel') || 'Cancel', style: 'cancel' },
-      { text: t('clear') || 'Clear', style: 'destructive', onPress: async () => {
-        const keys = ['forum_posts','liked_ids','notifications','last_weather','offline_weather','user_profile']
-        for (const k of keys) await saveItem(k, null)
-        showToast(t('local_data_cleared') || 'Local data cleared', 'success')
-      } }
-    ])
+    // open in-app confirmation modal for a cleaner UX on mobile
+    setShowConfirmClear(true)
+  }
+
+  const [showConfirmClear, setShowConfirmClear] = useState(false)
+
+  const doClearLocalData = async () => {
+    const keys = ['forum_posts','liked_ids','notifications','last_weather','offline_weather','user_profile']
+    for (const k of keys) await saveItem(k, null)
+    showToast(t('local_data_cleared') || 'Local data cleared', 'success')
+    setShowConfirmClear(false)
   }
 
   const exportData = async () => {
@@ -118,14 +122,19 @@ export default function Settings() {
     const out: any = {}
     for (const k of keys) out[k] = await loadItem(k)
     const content = JSON.stringify(out, null, 2)
-    // on web we can open in new tab, on native we could use Share - keep simple: toast + console
+    // on web we can open in new tab, on native we use Share
     if (Platform.OS === 'web') {
       const blob = new Blob([content], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       window.open(url)
     } else {
-      console.log('Exported user data:', content)
-      showToast(t('data_exported') || 'Data exported (check console)', 'info')
+      try {
+        await Share.share({ title: 'HuluFarm data export', message: content })
+        showToast(t('data_exported') || 'Data exported', 'success')
+      } catch (e: any) {
+        console.log('Share failed', e?.message)
+        showToast(t('data_exported') || 'Data exported (check console)', 'info')
+      }
     }
   }
 
@@ -254,6 +263,18 @@ export default function Settings() {
       </CardUI>
 
       <View style={{ height: 80 }} />
+      <Modal visible={showConfirmClear} transparent animationType="fade" onRequestClose={() => setShowConfirmClear(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', padding: 20, borderRadius: 10, width: '90%', maxWidth: 420 }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 8 }}>{t('clear_local_data_title') || 'Clear local data'}</Text>
+            <Text style={{ color: '#6b7280', marginBottom: 16 }}>{t('clear_local_data_confirm') || 'This will remove local stored posts, likes, notifications and cached weather. This is irreversible on this device. Continue?'}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+              <TouchableOpacity onPress={() => setShowConfirmClear(false)} style={{ padding: 8, marginRight: 8 }}><Text>{t('cancel') || 'Cancel'}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={doClearLocalData} style={{ padding: 8 }}><Text style={{ color: '#ef4444' }}>{t('clear') || 'Clear'}</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   )
 }

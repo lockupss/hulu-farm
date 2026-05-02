@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
-import { Link } from 'expo-router'
-import { useTranslation } from '@/lib/i18n'
 import { getJSON } from '@/lib/api'
+import { useTranslation } from '@/lib/i18n'
 import { loadItem } from '@/lib/storage'
+import { Link } from 'expo-router'
+import React, { useEffect, useState } from 'react'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import forumData from '../data/forum.json'
 
 function normalizePost(p: any) {

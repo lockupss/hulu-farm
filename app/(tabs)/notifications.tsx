@@ -3,12 +3,12 @@ import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { getJSON } from '@/lib/api'
-import { loadItem, saveItem } from '@/lib/storage'
-import React, { useEffect, useState } from 'react'
-import { FlatList, StyleSheet, Text, View, Switch, TouchableOpacity, Alert } from 'react-native'
 import { useTranslation } from '@/lib/i18n'
-import notificationsSeed from '../../data/notifications.json'
+import { loadItem, saveItem } from '@/lib/storage'
 import { useRouter } from 'expo-router'
+import React, { useEffect, useState } from 'react'
+import { Alert, FlatList, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import notificationsSeed from '../../data/notifications.json'
 
 const DEFAULT_PREFS = { 'Weather Alerts': true, 'Price Updates': true, 'Disease Alerts': true, 'Community Posts': true, 'Farm Reminders': true }
 

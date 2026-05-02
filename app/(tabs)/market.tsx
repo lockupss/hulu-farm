@@ -1,8 +1,8 @@
+import CardUI from '@/components/ui/Card'
+import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card-header'
+import { useTranslation } from '@/lib/i18n'
 import React from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import CardUI from '@/components/ui/Card'
-import { useTranslation } from '@/lib/i18n'
-import { CardHeader, CardTitle, CardDescription } from '@/components/ui/card-header'
 
 export default function MarketPrices() {
   const pricesSeed = [

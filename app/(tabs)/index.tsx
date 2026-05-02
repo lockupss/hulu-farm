@@ -1,9 +1,9 @@
+import CommunityHighlight from '@/components/community-highlight'
 import CardUI from '@/components/ui/Card'
 import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { useTranslation } from '@/lib/i18n'
-import CommunityHighlight from '@/components/community-highlight'
 import React from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 

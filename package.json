@@ -3,13 +3,13 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-  "start": "EXPO_NO_DOCTOR=1 expo start",
-  "api": "node server/index.js",
+    "start": "EXPO_NO_DOCTOR=1 expo start",
+    "api": "node server/index.js",
     "extract-pdf": "node ./scripts/extract_pdf.js",
     "reset-project": "node ./scripts/reset-project.js",
-  "android": "EXPO_NO_DOCTOR=1 expo start --android",
-  "ios": "EXPO_NO_DOCTOR=1 expo start --ios",
-  "web": "EXPO_NO_DOCTOR=1 expo start --web",
+    "android": "EXPO_NO_DOCTOR=1 expo start --android",
+    "ios": "EXPO_NO_DOCTOR=1 expo start --ios",
+    "web": "EXPO_NO_DOCTOR=1 expo start --web",
     "lint": "expo lint"
   },
   "dependencies": {
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/react-native": "^0.73.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "pdf-parse": "^1.1.2",

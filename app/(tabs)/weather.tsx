@@ -1,16 +1,16 @@
 import HelpModal from '@/components/help-modal'
 import Sparkline from '@/components/sparkline'
+import { useToast } from '@/components/toast'
 import CardUI from '@/components/ui/Card'
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useAppData } from '@/lib/app-data'
+import { useTranslation } from '@/lib/i18n'
 import { loadItem, saveItem } from '@/lib/storage'
 import { fetchWeather, loadCachedWeather, loadOfflineWeather, saveOfflineWeather } from '@/lib/weather'
-import { useAppData } from '@/lib/app-data'
-import { useToast } from '@/components/toast'
 import React, { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { useTranslation } from '@/lib/i18n'
 
 export default function Weather() {
   const { t } = useTranslation()

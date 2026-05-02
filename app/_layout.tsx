@@ -3,10 +3,11 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import Header from '@/components/header';
+import TransactionBanner from '@/components/transaction-banner';
 import { ToastProvider } from '@/components/toast';
 import { ThemeProvider } from '@/hooks/use-color-scheme';
-import { I18nProvider } from '@/lib/i18n'
-import { AppDataProvider } from '@/lib/app-data'
+import { AppDataProvider } from '@/lib/app-data';
+import { I18nProvider } from '@/lib/i18n';
 import React from 'react';
 
 export const unstable_settings = {
@@ -19,6 +20,7 @@ export default function RootLayout() {
       <I18nProvider>
         <ToastProvider>
           <Header />
+          <TransactionBanner />
           {/* App-wide data provider for weather/market to keep Home and pages consistent */}
           <AppDataProvider>
           <Stack>

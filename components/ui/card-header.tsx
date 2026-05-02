@@ -14,9 +14,23 @@ export const CardDescription = ({ children, style }: any) => (
 )
 
 const styles = StyleSheet.create({
-  header: { paddingBottom: 6 },
-  title: { fontSize: 16, fontWeight: '700' },
-  desc: { fontSize: 13, color: '#6b7280' }
+  header: {
+    paddingBottom: 10, // more breathing room
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827', // strong readable dark
+    letterSpacing: 0.3,
+    marginBottom: 4,
+  },
+
+  desc: {
+    fontSize: 14,
+    color: '#6b7280', // soft gray
+    lineHeight: 20,   // improves readability
+  },
 })
 
 export default CardHeader

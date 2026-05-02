@@ -3,10 +3,10 @@ import { StyleProp, ViewStyle } from 'react-native';
 
 export function IconSymbol({
   name,
-  size = 24,
+  size = 22, // slightly refined default
   color,
   style,
-  weight = 'regular',
+  weight = 'medium', // better visual balance than regular
 }: {
   name: SymbolViewProps['name'];
   size?: number;
@@ -24,6 +24,7 @@ export function IconSymbol({
         {
           width: size,
           height: size,
+          opacity: 0.9, // softer, less harsh
         },
         style,
       ]}
