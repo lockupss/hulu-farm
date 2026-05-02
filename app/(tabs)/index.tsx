@@ -5,12 +5,24 @@ import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { useTranslation } from '@/lib/i18n'
 import React from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View, Dimensions } from 'react-native'
+import { useAppData } from '@/lib/app-data'
 
 export default function Home() {
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
   const { t } = useTranslation()
+  const { weather, market } = useAppData()
+  const { width } = Dimensions.get('window')
+  const compact = width < 360
+
+  // helpers to read weather data from either mock server shape or open-meteo shape
+  const temp = weather?.data?.current_weather?.temperature ?? weather?.current?.temp ?? weather?.current?.temperature ?? '--'
+  const humidity = weather?.data?.current_weather?.relativehumidity ?? weather?.current?.humidity ?? weather?.current?.relativeHumidity ?? '--'
+  const place = weather?.place ?? weather?.location ?? t('your_location')
+
+  const maize = (market || []).find((m: any) => /maize/i.test(m.name || ''))
+  const maizePrice = maize?.price || (market && market[0] && market[0].price) || '--'
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -24,31 +36,31 @@ export default function Home() {
       </View>
 
       <View style={styles.statsGrid}>
-  <CardUI>
+  <CardUI style={styles.statCard}>
           <CardHeader>
             <CardTitle>{t('temperature')}</CardTitle>
           </CardHeader>
-          <Text style={styles.big}>28°C</Text>
-    <Text style={styles.muted}>{t('partly_cloudy_label')}</Text>
+          <Text style={styles.big}>{typeof temp === 'number' ? `${Math.round(temp)}°C` : temp}</Text>
+    <Text style={styles.muted}>{place}</Text>
   </CardUI>
 
-  <CardUI>
+  <CardUI style={styles.statCard}>
           <CardHeader>
             <CardTitle>{t('humidity')}</CardTitle>
           </CardHeader>
-          <Text style={styles.big}>65%</Text>
+          <Text style={styles.big}>{typeof humidity === 'number' ? `${humidity}%` : humidity}</Text>
     <Text style={styles.muted}>{t('optimal_for_growth_label')}</Text>
   </CardUI>
 
-  <CardUI>
+  <CardUI style={styles.statCard}>
           <CardHeader>
             <CardTitle>{t('maize_price')}</CardTitle>
           </CardHeader>
-          <Text style={styles.big}>2,450 Br</Text>
+          <Text style={styles.big}>{maizePrice}</Text>
     <Text style={styles.muted}>{t('compared_to_last_week')}</Text>
   </CardUI>
 
-  <CardUI>
+  <CardUI style={styles.statCard}>
           <CardHeader>
             <CardTitle>{t('active_farmers')}</CardTitle>
           </CardHeader>
@@ -111,6 +123,7 @@ const styles = StyleSheet.create({
   big: { fontSize: 22, fontWeight: '800', marginTop: 6 },
   muted: { color: '#6b7280', marginTop: 4 },
   featureGrid: { padding: 16 },
+  statCard: { width: '48%', minWidth: 140 },
   rowItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb' },
   rowItemBetween: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#e5e7eb' },
   itemTitle: { fontWeight: '600' },
