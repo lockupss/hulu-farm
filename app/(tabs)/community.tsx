@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, FlatList, Image, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
+import { Animated, Easing, FlatList, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
 import CategoryPicker from '@/components/category-picker'
 import { useToast } from '@/components/toast'
 import { Button } from '@/components/ui/Button'
-import CardUI from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { getJSON, postJSON, resolveMediaUrl } from '@/lib/api'
@@ -17,22 +15,19 @@ import forumData from '../../data/forum.json'
 
 function normalizePost(p: any) {
   const post = { ...p }
-  // replies can be a number (seed) or an array; normalize to array of reply objects
   if (!post.replies || Array.isArray(post.replies) === false) post.replies = []
-  // ensure likes is a number
   post.likes = typeof post.likes === 'number' ? post.likes : (Array.isArray(post.liked_by) ? post.liked_by.length : (post.likes ? Number(post.likes) : 0))
   post.liked_by = Array.isArray(post.liked_by) ? post.liked_by : []
   post.category = post.category || 'General'
-  // normalize nested replies recursively
   post.replies = (post.replies || []).map((r: any) => ({ ...(r || {}), replies: Array.isArray(r?.replies) ? r.replies : [], likes: typeof r?.likes === 'number' ? r.likes : 0, liked_by: Array.isArray(r?.liked_by) ? r.liked_by : [] }))
   return post
 }
 
 function formatTime(t: any) {
   try {
-     const date = new Date(t)
-     const diff = Date.now() - date.getTime()
-     const mins = Math.floor(diff / 60000)
+    const date = new Date(t)
+    const diff = Date.now() - date.getTime()
+    const mins = Math.floor(diff / 60000)
     if (mins < 1) return 'Just now'
     if (mins < 60) return `${mins}m`
     const hrs = Math.floor(mins / 60)
@@ -42,10 +37,67 @@ function formatTime(t: any) {
   } catch { return String(t) }
 }
 
-function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: { reply: any; onReply: (parentId: number, text: string, parentReplyId?: number) => void; onLike: (postId: number, replyId?: number) => void; onOpenProfile?: (userId: string) => void; canInteract: boolean }) {
+function LikeButton({ liked, count, onPress }: { liked: boolean; count: number; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current
+  const color = liked ? '#ef4444' : '#6b7280'
+  const animate = () => {
+    scale.setValue(0.85)
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.18, duration: 260, easing: Easing.out(Easing.elastic(1)), useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 0.98, duration: 120, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration: 100, easing: Easing.in(Easing.quad), useNativeDriver: true })
+    ]).start()
+  }
+  return (
+    <TouchableOpacity onPress={() => { animate(); onPress() }} style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Animated.View style={{ transform: [{ scale }], marginRight: 4 }}>
+        <Text style={{ fontSize: 16 }}>{liked ? '❤️' : '🤍'}</Text>
+      </Animated.View>
+      <Text style={[styles.actionText, { color }]}>{count}</Text>
+    </TouchableOpacity>
+  )
+}
+
+function InlineReplyInput({ placeholder, onSubmit, onCancel }: { placeholder: string; onSubmit: (text: string) => void; onCancel: () => void }) {
+  const [text, setText] = useState('')
+  return (
+    <View style={styles.inlineReplyBox}>
+      <TextInput
+        style={styles.inlineReplyInput}
+        placeholder={placeholder}
+        placeholderTextColor="#9CA3AF"
+        value={text}
+        onChangeText={setText}
+        multiline
+        autoFocus
+      />
+      <View style={styles.inlineReplyActions}>
+        <TouchableOpacity
+          style={[styles.inlineBtn, styles.inlineBtnPrimary]}
+          onPress={() => { if (text.trim()) { onSubmit(text); setText('') } }}
+        >
+          <Text style={styles.inlineBtnPrimaryText}>Reply</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.inlineBtn, styles.inlineBtnOutline]}
+          onPress={onCancel}
+        >
+          <Text style={styles.inlineBtnOutlineText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
+}
+
+function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
+  reply: any
+  onReply: (parentId: number, text: string, parentReplyId?: number) => void
+  onLike: (postId: number, replyId?: number) => void
+  onOpenProfile?: (userId: string) => void
+  canInteract: boolean
+}) {
   const { t } = useTranslation()
   const [replying, setReplying] = useState(false)
-  const [replyText, setReplyText] = useState('')
   const [collapsed, setCollapsed] = useState(true)
   const [avatarUri, setAvatarUri] = useState<string | null>(null)
   useEffect(() => {
@@ -56,53 +108,115 @@ function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: { rep
     })()
     return () => { cancelled = true }
   }, [reply.authorAvatar])
+
+  const nestedCount = reply.replies?.length ?? 0
+
   return (
-    <View style={{ marginTop: 8, paddingLeft: 12, borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={styles.smallAvatar}>
-          {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.smallAvatarImg} /> : <Text style={{ fontSize: 14 }}>💬</Text>}
-        </View>
-        <TouchableOpacity disabled={!reply.authorUserId} onPress={() => reply.authorUserId && onOpenProfile?.(String(reply.authorUserId))} style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, fontWeight: '600' }}>{reply.author} • {formatTime(reply.time)}</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={{ marginTop: 4 }}>{reply.text}</Text>
-      {reply.attachments?.map((a: any) => (
-        <TouchableOpacity key={a.url} onPress={() => { /* noop */ }}>
-          <Text style={{ color: '#0366d6', marginTop: 6 }}>{a.name || a.url}</Text>
-        </TouchableOpacity>
-      ))}
-      <View style={{ flexDirection: 'row', marginTop: 6, alignItems: 'center' }}>
-        <TouchableOpacity onPress={() => { if (!canInteract) return; setReplying(!replying) }}><Text style={styles.action}>💬 {reply.replies?.length ?? 0}</Text></TouchableOpacity>
-        <LikeButton liked={!!reply.liked} count={reply.likes ?? 0} onPress={() => { if (!canInteract) return; onLike(Number(reply.postId || reply.parentPostId), Number(reply.id)) }} />
-      </View>
-      {replying && canInteract && (
-        <View style={{ marginTop: 8 }}>
-          <Input placeholder={t('reply_to_reply') || 'Reply to reply...'} value={replyText} onChangeText={setReplyText} />
-          <View style={{ flexDirection: 'row', marginTop: 8 }}>
-              <Button style={{ flex: 1, marginRight: 8 }} onPress={async () => { if (replyText.trim()) { await onReply(Number(reply.postId || reply.parentPostId), replyText, Number(reply.id)); setReplyText(''); setReplying(false) } }}>
-              {t('reply')}
-            </Button>
-            <Button variant="outline" style={{ flex: 1 }} onPress={() => { setReplyText(''); setReplying(false) }}>
-              {t('cancel')}
-            </Button>
+    <View style={styles.replyRow}>
+      <View style={styles.replyThreadLine} />
+      <View style={styles.replyContent}>
+        {/* Author row */}
+        <View style={styles.replyAuthorRow}>
+          <View style={styles.smallAvatar}>
+            {avatarUri
+              ? <Image source={{ uri: avatarUri }} style={styles.smallAvatarImg} />
+              : <Text style={{ fontSize: 12 }}>💬</Text>}
           </View>
+          <TouchableOpacity disabled={!reply.authorUserId} onPress={() => reply.authorUserId && onOpenProfile?.(String(reply.authorUserId))}>
+            <Text style={styles.replyAuthor}>{reply.author}</Text>
+          </TouchableOpacity>
+          <Text style={styles.replyTime}> • {formatTime(reply.time)}</Text>
         </View>
-      )}
-      { !collapsed && reply.replies?.map((r: any) => (
-        <ReplyView key={r.id} reply={{ ...r, postId: reply.postId || reply.parentPostId }} onReply={onReply} onLike={onLike} onOpenProfile={onOpenProfile} canInteract={canInteract} />
-      ))}
-      <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={{ marginTop: 6 }}>
-        <Text style={{ color: '#0366d6' }}>{collapsed ? t('show_replies') : t('hide_replies')}</Text>
-      </TouchableOpacity>
+
+        {/* Reply text */}
+        <Text style={styles.replyText}>{reply.text}</Text>
+
+        {/* Actions */}
+        <View style={styles.replyActionsRow}>
+          {canInteract && (
+            <TouchableOpacity onPress={() => setReplying(!replying)} style={styles.replyActionBtn}>
+              <Text style={styles.actionText}>💬 {t('reply')}</Text>
+            </TouchableOpacity>
+          )}
+          <LikeButton
+            liked={!!reply.liked}
+            count={reply.likes ?? 0}
+            onPress={() => { if (!canInteract) return; onLike(Number(reply.postId || reply.parentPostId), Number(reply.id)) }}
+          />
+          {nestedCount > 0 && (
+            <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={styles.replyActionBtn}>
+              <Text style={styles.showRepliesText}>
+                {collapsed ? `▶ ${nestedCount} ${nestedCount === 1 ? 'reply' : 'replies'}` : '▼ Hide'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Inline reply input */}
+        {replying && canInteract && (
+          <InlineReplyInput
+            placeholder={t('reply_to_reply') || 'Reply to reply...'}
+            onSubmit={async (text) => {
+              await onReply(Number(reply.postId || reply.parentPostId), text, Number(reply.id))
+              setReplying(false)
+            }}
+            onCancel={() => setReplying(false)}
+          />
+        )}
+
+        {/* Nested replies */}
+        {!collapsed && reply.replies?.map((r: any) => (
+          <ReplyView
+            key={r.id}
+            reply={{ ...r, postId: reply.postId || reply.parentPostId }}
+            onReply={onReply}
+            onLike={onLike}
+            onOpenProfile={onOpenProfile}
+            canInteract={canInteract}
+          />
+        ))}
+      </View>
     </View>
   )
 }
 
-function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: { item: any; onReply: (id: number, text: string, parentReplyId?: number) => void; onLike: (id: number, replyId?: number) => void; onOpenProfile?: (userId: string) => void; canInteract: boolean }) {
+function ReplyList({ post, replies, onReply, onLike, onOpenProfile, canInteract }: any) {
   const { t } = useTranslation()
+  const [collapsed, setCollapsed] = useState(true)
+  const n = replies?.length ?? 0
+  if (n === 0) return null
+  return (
+    <View style={{ marginTop: 8 }}>
+      <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={styles.showRepliesBtn}>
+        <Text style={styles.showRepliesText}>
+          {collapsed ? `▶ ${t('show_x_replies').replace('{count}', String(n))}` : `▼ ${t('hide_replies')}`}
+        </Text>
+      </TouchableOpacity>
+      {!collapsed && (replies || []).map((r: any) =>
+        <ReplyView
+          key={r.id}
+          reply={{ ...r, postId: post.id }}
+          onReply={onReply}
+          onLike={onLike}
+          onOpenProfile={onOpenProfile}
+          canInteract={canInteract}
+        />
+      )}
+    </View>
+  )
+}
+
+function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
+  item: any
+  onReply: (id: number, text: string, parentReplyId?: number) => void
+  onLike: (id: number, replyId?: number) => void
+  onOpenProfile?: (userId: string) => void
+  canInteract: boolean
+}) {
+  const { t } = useTranslation()
+  const { width } = useWindowDimensions()
+  const compact = width < 390
   const [replying, setReplying] = useState(false)
-  const [replyText, setReplyText] = useState('')
   const [avatarUri, setAvatarUri] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -113,84 +227,81 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
     return () => { cancelled = true }
   }, [item.authorAvatar])
 
+  const replyCount = item.replies?.length ?? 0
+
   return (
-    <View style={styles.card}>
-      <View style={styles.row}>
-        <View style={styles.avatar}>
-          {avatarUri ? <Image source={{ uri: avatarUri }} style={styles.avatarImg} /> : <Text>💬</Text>}
-        </View>
-        <View style={styles.content}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>{item.title || item.text?.slice(0, 30)}</Text>
-            <View style={styles.category}><Text style={styles.categoryText}>{translateCategory(item.category, t)}</Text></View>
-          </View>
-          <TouchableOpacity disabled={!item.authorUserId} onPress={() => item.authorUserId && onOpenProfile?.(String(item.authorUserId))}>
-            <Text style={styles.meta}>{item.author} • {formatTime(item.time)}</Text>
-          </TouchableOpacity>
-          <Text style={styles.body}>{item.content || item.text}</Text>
-          {item.attachments?.map((a: any) => (
-            <TouchableOpacity key={a.url} onPress={() => { /* noop */ }}>
-              <Text style={{ color: '#0366d6', marginTop: 6 }}>{a.name || a.url}</Text>
-            </TouchableOpacity>
-          ))}
-          <View style={styles.actionsRow}>
-            <TouchableOpacity onPress={() => { if (!canInteract) return; setReplying(!replying) }}><Text style={styles.action}>💬 {t('replies_count').replace('{n}', String(item.replies?.length ?? 0))}</Text></TouchableOpacity>
-            <LikeButton liked={!!item.liked} count={item.likes ?? 0} onPress={() => { if (!canInteract) return; onLike(Number(item.id)) }} />
-          </View>
-          {replying && canInteract && (
-              <View style={{ marginTop: 8 }}>
-              <Input placeholder={t('write_reply') || 'Write a reply...'} value={replyText} onChangeText={setReplyText} />
-              <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                <Button style={{ flex: 1, marginRight: 8 }} onPress={async () => { if (replyText.trim()) { await onReply(Number(item.id), replyText); setReplyText(''); setReplying(false) } }}>
-                  {t('reply')}
-                </Button>
-                <Button variant="outline" style={{ flex: 1 }} onPress={() => { setReplyText(''); setReplying(false) }}>
-                  {t('cancel')}
-                </Button>
-              </View>
-            </View>
-          )}
-          <ReplyList post={item} replies={item.replies || []} onReply={onReply} onLike={onLike} onOpenProfile={onOpenProfile} canInteract={canInteract} />
+    <View style={styles.postCard}>
+      {/* Category badge + title */}
+      <View style={styles.postHeaderRow}>
+        <View style={styles.categoryBadge}>
+          <Text style={styles.categoryBadgeText}>{translateCategory(item.category, t)}</Text>
         </View>
       </View>
+
+      <Text style={styles.postTitle} numberOfLines={2}>{item.title || item.text?.slice(0, 60)}</Text>
+
+      {/* Author */}
+      <View style={styles.postAuthorRow}>
+        <View style={styles.avatar}>
+          {avatarUri
+            ? <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+            : <Text style={{ fontSize: 16 }}>🧑‍🌾</Text>}
+        </View>
+        <TouchableOpacity disabled={!item.authorUserId} onPress={() => item.authorUserId && onOpenProfile?.(String(item.authorUserId))}>
+          <Text style={styles.postAuthor}>{item.author}</Text>
+        </TouchableOpacity>
+        <Text style={styles.postTime}> • {formatTime(item.time)}</Text>
+      </View>
+
+      {/* Body */}
+      <Text style={styles.postBody}>{item.content || item.text}</Text>
+
+      {/* Attachments */}
+      {item.attachments?.map((a: any) => (
+        <TouchableOpacity key={a.url}>
+          <Text style={styles.attachmentLink}>{a.name || a.url}</Text>
+        </TouchableOpacity>
+      ))}
+
+      {/* Action bar */}
+      <View style={[styles.postActionsRow, compact && styles.postActionsRowCompact]}>
+        {canInteract && (
+          <TouchableOpacity onPress={() => setReplying(!replying)} style={styles.actionBtn}>
+            <Text style={styles.actionText}>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
+          </TouchableOpacity>
+        )}
+        {!canInteract && (
+          <Text style={styles.actionText}>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
+        )}
+        <LikeButton
+          liked={!!item.liked}
+          count={item.likes ?? 0}
+          onPress={() => { if (!canInteract) return; onLike(Number(item.id)) }}
+        />
+      </View>
+
+      {/* Inline reply input */}
+      {replying && canInteract && (
+        <InlineReplyInput
+          placeholder={t('write_reply') || 'Write a reply...'}
+          onSubmit={async (text) => {
+            await onReply(Number(item.id), text)
+            setReplying(false)
+          }}
+          onCancel={() => setReplying(false)}
+        />
+      )}
+
+      {/* Replies list */}
+      <ReplyList
+        post={item}
+        replies={item.replies || []}
+        onReply={onReply}
+        onLike={onLike}
+        onOpenProfile={onOpenProfile}
+        canInteract={canInteract}
+      />
     </View>
-  )
-}
-
-function ReplyList({ post, replies, onReply, onLike, onOpenProfile, canInteract }: any) {
-  const { t } = useTranslation()
-  const [collapsed, setCollapsed] = useState(true)
-  const n = replies?.length ?? 0
-  return (
-    <View>
-      { !collapsed && (replies || []).map((r: any) => <ReplyView key={r.id} reply={{ ...r, postId: post.id }} onReply={onReply} onLike={onLike} onOpenProfile={onOpenProfile} canInteract={canInteract} />) }
-      <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={{ marginTop: 6 }}>
-        <Text style={{ color: '#0366d6' }}>{collapsed ? t('show_x_replies').replace('{count}', String(n)) : t('hide_replies')}</Text>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
-function LikeButton({ liked, count, onPress }: { liked: boolean; count: number; onPress: () => void }) {
-  const scale = useRef(new Animated.Value(1)).current
-  const color = liked ? '#ef4444' : '#6b7280'
-  // smoother overshoot animation
-  const animate = () => {
-    scale.setValue(0.85)
-    Animated.sequence([
-      Animated.timing(scale, { toValue: 1.18, duration: 260, easing: Easing.out(Easing.elastic(1)), useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 0.98, duration: 120, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: 100, easing: Easing.in(Easing.quad), useNativeDriver: true })
-    ]).start()
-  }
-
-  return (
-    <TouchableOpacity onPress={() => { animate(); onPress() }} style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Animated.View style={{ transform: [{ scale }], marginRight: 8 }}>
-        <Text style={{ color, fontSize: 18 }}>{liked ? '❤️' : '🤍'}</Text>
-      </Animated.View>
-      <Text style={[styles.action, { color }]}>{count}</Text>
-    </TouchableOpacity>
   )
 }
 
@@ -206,7 +317,6 @@ export default function Community() {
   const { token, user, isSignedIn } = useAuth()
   const [posts, setPosts] = useState<any[]>([])
   const [text, setText] = useState('')
-  const [attachments, setAttachments] = useState<any[]>([])
   const [category, setCategory] = useState('General')
   const [loading, setLoading] = useState(true)
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({})
@@ -216,8 +326,7 @@ export default function Community() {
       try {
         const remote = await getJSON('/api/forum')
         setPosts((remote || []).map((p: any) => normalizePost(p)))
-    } catch (_err) {
-      console.warn('Failed to load forum, falling back to local', _err)
+      } catch (_err) {
         const stored = await loadItem('forum_posts')
         if (stored) setPosts((stored || []).map((p: any) => normalizePost(p)))
         else setPosts((forumData || []).map((p: any) => normalizePost(p)))
@@ -234,9 +343,7 @@ export default function Community() {
   const userId = user?.id ?? null
   const canInteract = isSignedIn && !!token
 
-  const openProfile = (uid: string) => {
-    router.push(`/user/${uid}`)
-  }
+  const openProfile = (uid: string) => { router.push(`/user/${uid}`) }
 
   const handlePost = async () => {
     if (!canInteract) {
@@ -251,7 +358,7 @@ export default function Community() {
       id: timestamp,
       author: user?.displayName || 'You',
       authorUserId: userId,
-      title: text.slice(0, 30),
+      title: text.slice(0, 60),
       content: text,
       replies: [],
       likes: 0,
@@ -259,7 +366,6 @@ export default function Community() {
       timestamp,
       category,
     }
-    if (attachments.length) newPost.attachments = attachments
     const prevPosts = posts
     const next = [newPost, ...posts]
     setPosts(next)
@@ -267,17 +373,12 @@ export default function Community() {
     try {
       await postJSON('/api/forum', newPost, token)
     } catch {
-      console.warn('Failed to post remotely')
       showToast(t('register_failed') || 'Post failed. Check you are online and signed in.', 'error')
       setPosts(prevPosts)
       await saveItem('forum_posts', prevPosts)
     }
     setText('')
-    setAttachments([])
   }
-
-  // Attachment picking disabled in this build (unused). Install expo-image-picker
-  // to enable native file attachments when needed.
 
   const likePost = async (postId: number, replyId?: number) => {
     if (!canInteract || !userId) {
@@ -295,15 +396,8 @@ export default function Community() {
         const updateReplyRec = (replies: any[]) => {
           if (!replies) return
           for (let r of replies) {
-            if (Number(r.id) === Number(replyId)) {
-              r.likes = (r.likes || 0) + (optimisticLiked ? 1 : -1)
-              r.liked = optimisticLiked
-              return true
-            }
-            if (r.replies) {
-              const found = updateReplyRec(r.replies)
-              if (found) return true
-            }
+            if (Number(r.id) === Number(replyId)) { r.likes = (r.likes || 0) + (optimisticLiked ? 1 : -1); r.liked = optimisticLiked; return true }
+            if (r.replies) { const found = updateReplyRec(r.replies); if (found) return true }
           }
           return false
         }
@@ -314,7 +408,6 @@ export default function Community() {
       }
       return copy
     })
-
     const prevPosts = posts
     const nextPosts = toggleLocal(posts)
     setPosts(nextPosts)
@@ -327,7 +420,6 @@ export default function Community() {
       const res = await postJSON(`/api/forum/${postId}/like`, body, token)
       const newLikes = res.likes
       const liked = !!res.liked
-      // reconcile counts from server
       const reconciled = posts.map(p => {
         if (Number(p.id) !== Number(postId)) return p
         const copy = { ...p }
@@ -335,23 +427,13 @@ export default function Community() {
           const updateReplyRec = (replies: any[]) => {
             if (!replies) return
             for (let r of replies) {
-              if (Number(r.id) === Number(replyId)) {
-                r.likes = newLikes
-                r.liked = liked
-                return true
-              }
-              if (r.replies) {
-                const found = updateReplyRec(r.replies)
-                if (found) return true
-              }
+              if (Number(r.id) === Number(replyId)) { r.likes = newLikes; r.liked = liked; return true }
+              if (r.replies) { const found = updateReplyRec(r.replies); if (found) return true }
             }
             return false
           }
           updateReplyRec(copy.replies)
-        } else {
-          copy.likes = newLikes
-          copy.liked = liked
-        }
+        } else { copy.likes = newLikes; copy.liked = liked }
         return copy
       })
       setPosts(reconciled)
@@ -361,14 +443,12 @@ export default function Community() {
       showToast(liked ? (t('like_success') || 'Liked') : (t('unlike_success') || 'Unliked'), 'success')
       await saveItem('forum_posts', reconciled)
     } catch {
-      // rollback
       setPosts(prevPosts)
       const rolledBack = { ...likedIds }
       rolledBack[idKey] = currentlyLiked
       setLikedIds(rolledBack)
       await saveItem('liked_ids', rolledBack)
       showToast('Failed to update like. Please try again.', 'error')
-      console.warn('like failed')
     }
   }
 
@@ -384,74 +464,194 @@ export default function Community() {
       showToast('Reply posted', 'success')
     } catch (e) {
       showToast('Failed to post reply', 'error')
-      console.warn('reply failed', e)
     }
     const next = posts.map(p => (Number(p.id) === Number(id) ? { ...p, replies: [reply, ...(p.replies || [])] } : p))
     setPosts(next)
     await saveItem('forum_posts', next)
   }
 
-  
-
-  // derive categories from posts + defaults
   const defaultCategories = ['General', 'Disease Management', 'Market Trends', 'Weather Preparation']
   const derived = Array.from(new Set([...(posts || []).map(p => p.category).filter(Boolean), ...defaultCategories]))
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }] }>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      {/* Header */}
       <View style={styles.header}>
-  <Text style={[styles.headerTitle, { color: colors.text }]}>{t('forum')}</Text>
-  <Text style={[styles.headerSubtitle, { color: muted }]}>{t('forum_sub')}</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('forum')}</Text>
+        <Text style={[styles.headerSubtitle, { color: muted }]}>{t('forum_sub')}</Text>
       </View>
 
-  <CardUI style={{ marginHorizontal: 16 }}>
-          <Input placeholder={t('whats_on_your_mind')} value={text} onChangeText={setText} />
-        <View style={[styles.composeRow, compact && styles.composeRowCompact]}>
-            <Button style={{ flex: 1, marginRight: compact ? 0 : 8 }} onPress={handlePost}>
-            {t('post_discussion')}
-          </Button>
-          <CategoryPicker category={category} setCategory={setCategory} options={derived} />
+      {/* Compact compose box */}
+      <View style={[styles.composeBox, { borderColor: colors.tint + '33', backgroundColor: colorScheme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
+        <TextInput
+          style={[styles.composeInput, { color: colors.text }]}
+          placeholder={t('whats_on_your_mind')}
+          placeholderTextColor={muted}
+          value={text}
+          onChangeText={setText}
+          multiline
+          numberOfLines={2}
+        />
+        <View style={[styles.composeActions, compact && styles.composeActionsCompact]}>
+          <View style={{ flex: 1, marginRight: compact ? 0 : 8, marginBottom: compact ? 6 : 0 }}>
+            <CategoryPicker category={category} setCategory={setCategory} options={derived} />
+          </View>
+          <TouchableOpacity
+            style={[styles.postBtn, { backgroundColor: colors.tint }, !text.trim() && styles.postBtnDisabled]}
+            onPress={handlePost}
+            disabled={!text.trim()}
+          >
+            <Text style={styles.postBtnText}>{t('post_discussion')}</Text>
+          </TouchableOpacity>
         </View>
-  </CardUI>
+      </View>
+
+      {/* Posts list */}
       {loading ? (
-        <View style={{ padding: 16 }}><Text>{t('loading')}</Text></View>
+        <View style={{ padding: 24, alignItems: 'center' }}>
+          <Text style={{ color: muted }}>{t('loading')}</Text>
+        </View>
       ) : (
         <FlatList
           data={posts}
           keyExtractor={(i) => String(i.id)}
           renderItem={({ item }) => (
-            <CardUI style={{ marginHorizontal: 16 }}>
-              <DiscussionItem item={item} onLike={likePost} onReply={replyToPost} onOpenProfile={openProfile} canInteract={canInteract} />
-            </CardUI>
+            <DiscussionItem
+              item={item}
+              onLike={likePost}
+              onReply={replyToPost}
+              onOpenProfile={openProfile}
+              canInteract={canInteract}
+            />
           )}
-          contentContainerStyle={{ paddingVertical: 16 }}
+          ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colorScheme === 'dark' ? '#2C2C2E' : '#F3F4F6', marginHorizontal: 16 }} />}
+          contentContainerStyle={{ paddingBottom: 80 }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={{ padding: 32, alignItems: 'center' }}>
+              <Text style={{ fontSize: 32 }}>🌱</Text>
+              <Text style={{ color: muted, marginTop: 8, textAlign: 'center' }}>{t('no_recent_discussions')}</Text>
+            </View>
+          }
         />
       )}
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
-  const styles = StyleSheet.create({
+const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { padding: 16 },
-  headerTitle: { fontSize: 24, fontWeight: '700' },
-  headerSubtitle: { fontSize: 14, marginTop: 6 },
-  card: { backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 12, elevation: 1 },
-  row: { flexDirection: 'row', alignItems: 'flex-start' },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E6F4EA', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarImg: { width: 40, height: 40, borderRadius: 20 },
-  smallAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#E6F4EA', alignItems: 'center', justifyContent: 'center', marginRight: 8, overflow: 'hidden' },
-  smallAvatarImg: { width: 28, height: 28, borderRadius: 14 },
-  content: { flex: 1, marginLeft: 12 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 16, fontWeight: '600' },
-  category: { backgroundColor: '#F0F7FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  categoryText: { fontSize: 12, color: '#0366d6' },
-  meta: { fontSize: 12, color: '#6b7280', marginTop: 4 },
-  body: { marginTop: 8, fontSize: 14, color: '#374151' },
-  actionsRow: { flexDirection: 'row', gap: 16, marginTop: 8 },
-  action: { fontSize: 12, color: '#6b7280', marginRight: 16 },
-  composeRow: { flexDirection: 'row', marginTop: 10, alignItems: 'center' },
-  composeRowCompact: { flexDirection: 'column', alignItems: 'stretch', gap: 8 }
-})
 
+  // Header
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  headerTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  headerSubtitle: { fontSize: 13, marginTop: 2 },
+
+  // Compact compose
+  composeBox: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10,
+  },
+  composeInput: {
+    fontSize: 14,
+    minHeight: 52,
+    textAlignVertical: 'top',
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  composeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  composeActionsCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  postBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  postBtnDisabled: { opacity: 0.45 },
+  postBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  // Post card
+  postCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  postHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  categoryBadge: {
+    backgroundColor: '#EBF5FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  categoryBadgeText: { fontSize: 11, fontWeight: '600', color: '#1D6FA4' },
+  postTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 6, lineHeight: 20 },
+  postAuthorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  avatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E6F4EA', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginRight: 6 },
+  avatarImg: { width: 24, height: 24, borderRadius: 12 },
+  postAuthor: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  postTime: { fontSize: 12, color: '#9CA3AF' },
+  postBody: { fontSize: 14, color: '#4B5563', lineHeight: 20, marginBottom: 10 },
+  attachmentLink: { color: '#0366d6', marginTop: 4, fontSize: 13 },
+
+  // Post actions
+  postActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  postActionsRowCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center' },
+  actionText: { fontSize: 12, color: '#6b7280' },
+
+  // Reply thread
+  showRepliesBtn: { paddingVertical: 4 },
+  showRepliesText: { fontSize: 12, color: '#0366d6', fontWeight: '600' },
+
+  replyRow: { flexDirection: 'row', marginTop: 10 },
+  replyThreadLine: { width: 2, backgroundColor: '#E5E7EB', marginRight: 10, borderRadius: 1 },
+  replyContent: { flex: 1 },
+  replyAuthorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
+  smallAvatar: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#E6F4EA', alignItems: 'center', justifyContent: 'center', marginRight: 6, overflow: 'hidden' },
+  smallAvatarImg: { width: 20, height: 20, borderRadius: 10 },
+  replyAuthor: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  replyTime: { fontSize: 11, color: '#9CA3AF' },
+  replyText: { fontSize: 13, color: '#4B5563', lineHeight: 18, marginBottom: 4 },
+  replyActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+  replyActionBtn: { paddingVertical: 2 },
+
+  // Inline reply input
+  inlineReplyBox: {
+    marginTop: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 8,
+  },
+  inlineReplyInput: {
+    fontSize: 13,
+    color: '#111827',
+    minHeight: 44,
+    textAlignVertical: 'top',
+  },
+  inlineReplyActions: { flexDirection: 'row', gap: 8, marginTop: 6, justifyContent: 'flex-end' },
+  inlineBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 6 },
+  inlineBtnPrimary: { backgroundColor: '#16A34A' },
+  inlineBtnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  inlineBtnOutline: { borderWidth: 1, borderColor: '#D1D5DB' },
+  inlineBtnOutlineText: { color: '#374151', fontWeight: '600', fontSize: 12 },
+})
