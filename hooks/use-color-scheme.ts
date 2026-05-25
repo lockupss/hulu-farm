@@ -1,0 +1,37 @@
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { Appearance, ColorSchemeName } from 'react-native'
+
+type ThemeContextType = {
+	scheme: ColorSchemeName
+	setScheme: (s: ColorSchemeName) => void
+}
+
+const ThemeContext = createContext<ThemeContextType>({ scheme: 'light', setScheme: () => {} })
+
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+	const [scheme, setScheme] = useState<ColorSchemeName>('light')
+
+       // Remove system color scheme listener to force day mode
+       // useEffect(() => {
+       //      const listener = ({ colorScheme }: { colorScheme: ColorSchemeName | null }) => {
+       //              if (colorScheme) setScheme(colorScheme)
+       //      }
+       //      const sub = Appearance.addChangeListener(listener)
+       //      return () => sub.remove()
+       // }, [])
+
+	// Avoid JSX in .ts file; use createElement
+	return React.createElement(ThemeContext.Provider, { value: { scheme, setScheme } }, children)
+}
+
+export function useColorScheme() {
+	const ctx = useContext(ThemeContext)
+	return ctx.scheme
+}
+
+export function useSetColorScheme() {
+	const ctx = useContext(ThemeContext)
+	return ctx.setScheme
+}
+
+export default useColorScheme

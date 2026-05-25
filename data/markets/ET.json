@@ -1,0 +1,6 @@
+[
+  { "name": "Maize", "price": 2450, "change": 5, "unit": "per quintal" },
+  { "name": "Wheat", "price": 3100, "change": 2, "unit": "per quintal" },
+  { "name": "Teff", "price": 5200, "change": -3, "unit": "per quintal" },
+  { "name": "Beans", "price": 4800, "change": 1, "unit": "per quintal" }
+]

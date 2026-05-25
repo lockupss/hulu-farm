@@ -1,0 +1,47 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
+import { ComponentProps } from 'react';
+import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+
+type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+type IconSymbolName = keyof typeof MAPPING;
+
+const MAPPING = {
+  'house.fill': 'home',
+  'paperplane.fill': 'send',
+  'chevron.left.forwardslash.chevron.right': 'code',
+  'chevron.right': 'chevron-right',
+  'cloud.fill': 'cloud',
+  'chart.bar.fill': 'bar-chart',
+  'person.2.fill': 'people',
+  'bell.fill': 'notifications',
+  'person.crop.circle.fill': 'account-circle',
+  'gearshape.fill': 'settings',
+} as IconMapping;
+
+export function IconSymbol({
+  name,
+  size = 22, // consistent with your system
+  color,
+  style,
+}: {
+  name: IconSymbolName;
+  size?: number;
+  color: string | OpaqueColorValue;
+  style?: StyleProp<TextStyle>;
+  weight?: SymbolWeight;
+}) {
+  return (
+    <MaterialIcons
+      color={color}
+      size={size}
+      name={MAPPING[name]}
+      style={[
+        {
+          opacity: 0.9, // softer icon tone like iOS version
+        },
+        style,
+      ]}
+    />
+  );
+}

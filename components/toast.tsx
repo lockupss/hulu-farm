@@ -1,0 +1,71 @@
+import { Colors } from '@/constants/theme'
+import { useColorScheme } from '@/hooks/use-color-scheme'
+import React, { createContext, useCallback, useContext, useState } from 'react'
+import { Animated, StyleSheet, Text, View } from 'react-native'
+
+type ToastType = 'info' | 'success' | 'error'
+
+type Toast = { id: number; message: string; type?: ToastType }
+
+const ToastContext = createContext<{ showToast: (message: string, type?: ToastType) => void } | null>(null)
+
+export function useToast() {
+  const ctx = useContext(ToastContext)
+  if (!ctx) {
+    // Provide a safe fallback so components can call showToast outside of a provider
+    return { showToast: (message: string, type: ToastType = 'info') => {
+      // Fallback logs so calls are no-ops in environments without a provider
+      // Keep this deterministic and side-effect-light for tests/dev
+        console.log('[toast fallback]', type, message)
+    } }
+  }
+  return ctx
+}
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const colorScheme = useColorScheme()
+  const colors = Colors[colorScheme ?? 'light']
+
+  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+    const id = Date.now() + Math.floor(Math.random() * 1000)
+    const t = { id, message, type }
+    setToasts(prev => [...prev, t])
+    setTimeout(() => setToasts(prev => prev.filter(x => x.id !== id)), 3000)
+  }, [])
+
+  return (
+    <ToastContext.Provider value={{ showToast }}>
+      {children}
+      <View style={[styles.container, { pointerEvents: 'box-none' }]}>
+        {toasts.map(t => (
+          <ToastCard key={t.id} toast={t} colors={colors} />
+        ))}
+      </View>
+    </ToastContext.Provider>
+  )
+}
+
+function ToastCard({ toast, colors }: { toast: Toast; colors: any }) {
+  const opacityRef = React.useRef(new Animated.Value(0))
+  const opacity = opacityRef.current
+  React.useEffect(() => {
+    Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start()
+    return () => { /* noop */ }
+  }, [opacity])
+  const background = toast.type === 'error' ? '#FEF2F2' : toast.type === 'success' ? '#ECFDF5' : '#F0F9FF'
+  const border = toast.type === 'error' ? '#FCA5A5' : toast.type === 'success' ? '#34D399' : '#60A5FA'
+  return (
+    <Animated.View style={[styles.toast, { backgroundColor: background, borderColor: border, opacity }]}> 
+      <Text style={[styles.toastText, { color: colors.text }]}>{toast.message}</Text>
+    </Animated.View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: { position: 'absolute', left: 16, right: 16, top: 36, alignItems: 'center', zIndex: 9999 },
+  toast: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginTop: 8, borderWidth: 1, minWidth: '60%' },
+  toastText: { fontSize: 14 }
+})
+
+export default ToastProvider
