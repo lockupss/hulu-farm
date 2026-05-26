@@ -25,8 +25,14 @@ export default function TabLayout() {
           paddingTop: 12,
           paddingBottom: 16,
           borderTopWidth: 1,
-          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.05)',
           elevation: 8,
+          zIndex: 100,
+          overflow: 'visible' as const,
+          // Cross-platform shadow (iOS + web)
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,

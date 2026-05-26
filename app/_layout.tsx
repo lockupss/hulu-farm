@@ -55,7 +55,6 @@ function RootLayoutContent() {
         <ToastProvider>
           <Header />
           <TransactionBanner />
-          {/* App-wide data provider for weather/market to keep Home and pages consistent */}
           <AppDataProvider>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -74,3 +73,4 @@ function RootLayoutContent() {
     </PaperProvider>
   )
 }
+

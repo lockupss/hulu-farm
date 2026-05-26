@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, FlatList, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native'
+import { Animated, Easing, FlatList, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, LayoutAnimation, UIManager } from 'react-native'
 import { useRouter } from 'expo-router'
 import CategoryPicker from '@/components/category-picker'
 import { useToast } from '@/components/toast'
@@ -12,6 +12,10 @@ import { useTranslation } from '@/lib/i18n'
 import { loadItem, saveItem } from '@/lib/storage'
 import { translateCategory } from '@/lib/translate-data'
 import forumData from '../../data/forum.json'
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true)
+}
 
 function normalizePost(p: any) {
   const post = { ...p }
@@ -133,15 +137,22 @@ function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
 
         {/* Actions */}
         <View style={styles.replyActionsRow}>
-          {canInteract && (
-            <TouchableOpacity onPress={() => setReplying(!replying)} style={styles.replyActionBtn}>
-              <Text style={styles.actionText}>💬 {t('reply')}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={() => {
+              if (!canInteract) {
+                onReply(Number(reply.postId || reply.parentPostId), '', Number(reply.id))
+              } else {
+                setReplying(!replying)
+              }
+            }}
+            style={styles.replyActionBtn}
+          >
+            <Text style={styles.actionText}>💬 {t('reply')}</Text>
+          </TouchableOpacity>
           <LikeButton
             liked={!!reply.liked}
             count={reply.likes ?? 0}
-            onPress={() => { if (!canInteract) return; onLike(Number(reply.postId || reply.parentPostId), Number(reply.id)) }}
+            onPress={() => onLike(Number(reply.postId || reply.parentPostId), Number(reply.id))}
           />
           {nestedCount > 0 && (
             <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={styles.replyActionBtn}>
@@ -265,18 +276,22 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
 
       {/* Action bar */}
       <View style={[styles.postActionsRow, compact && styles.postActionsRowCompact]}>
-        {canInteract && (
-          <TouchableOpacity onPress={() => setReplying(!replying)} style={styles.actionBtn}>
-            <Text style={styles.actionText}>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
-          </TouchableOpacity>
-        )}
-        {!canInteract && (
+        <TouchableOpacity
+          onPress={() => {
+            if (!canInteract) {
+              onReply(Number(item.id), '')
+            } else {
+              setReplying(!replying)
+            }
+          }}
+          style={styles.actionBtn}
+        >
           <Text style={styles.actionText}>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
-        )}
+        </TouchableOpacity>
         <LikeButton
           liked={!!item.liked}
           count={item.likes ?? 0}
-          onPress={() => { if (!canInteract) return; onLike(Number(item.id)) }}
+          onPress={() => onLike(Number(item.id))}
         />
       </View>
 
@@ -320,6 +335,26 @@ export default function Community() {
   const [category, setCategory] = useState('General')
   const [loading, setLoading] = useState(true)
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({})
+
+  // Collapsible Compose Box States
+  const [isExpanded, setIsExpanded] = useState(false)
+  const rotateAnim = useRef(new Animated.Value(0)).current
+
+  const toggleExpanded = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+    const nextState = !isExpanded
+    setIsExpanded(nextState)
+    Animated.timing(rotateAnim, {
+      toValue: nextState ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start()
+  }
+
+  const rotateInterpolate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg']
+  })
 
   useEffect(() => {
     ;(async () => {
@@ -370,6 +405,7 @@ export default function Community() {
     const next = [newPost, ...posts]
     setPosts(next)
     await saveItem('forum_posts', next)
+    toggleExpanded()
     try {
       await postJSON('/api/forum', newPost, token)
     } catch {
@@ -452,26 +488,67 @@ export default function Community() {
     }
   }
 
-  const replyToPost = async (id: number, replyText: string) => {
+  const replyToPost = async (id: number, replyText: string, parentReplyId?: number) => {
     if (!canInteract || !token) {
       showToast(t('sign_in_to_interact') || 'Sign in to reply', 'error')
       router.push('/login')
       return
     }
-    const reply = { id: Date.now(), author: user?.displayName || 'You', authorUserId: userId, text: replyText, time: new Date().toISOString(), timestamp: Date.now(), attachments: [] }
+    if (!replyText.trim()) return
+    const reply = {
+      id: Date.now(),
+      author: user?.displayName || 'You',
+      authorUserId: userId,
+      text: replyText,
+      time: new Date().toISOString(),
+      timestamp: Date.now(),
+      attachments: [],
+      parentReplyId,
+      replies: [],
+      likes: 0,
+      liked_by: []
+    }
     try {
       await postJSON(`/api/forum/${id}/reply`, reply, token)
       showToast('Reply posted', 'success')
-    } catch (e) {
+
+      const addReplyToPostLocal = (postsArr: any[]) => postsArr.map(p => {
+        if (Number(p.id) !== Number(id)) return p
+        const copy = { ...p }
+        if (parentReplyId) {
+          const updateRepliesRec = (repliesList: any[]) => {
+            if (!repliesList) return false
+            for (let i = 0; i < repliesList.length; i++) {
+              if (Number(repliesList[i].id) === Number(parentReplyId)) {
+                repliesList[i].replies = [reply, ...(repliesList[i].replies || [])]
+                return true
+              }
+              if (repliesList[i].replies) {
+                const found = updateRepliesRec(repliesList[i].replies)
+                if (found) return true
+              }
+            }
+            return false
+          }
+          const updated = updateRepliesRec(copy.replies)
+          if (!updated) {
+            copy.replies = [reply, ...(copy.replies || [])]
+          }
+        } else {
+          copy.replies = [reply, ...(copy.replies || [])]
+        }
+        return copy
+      })
+
+      const next = addReplyToPostLocal(posts)
+      setPosts(next)
+      await saveItem('forum_posts', next)
+    } catch {
       showToast('Failed to post reply', 'error')
     }
-    const next = posts.map(p => (Number(p.id) === Number(id) ? { ...p, replies: [reply, ...(p.replies || [])] } : p))
-    setPosts(next)
-    await saveItem('forum_posts', next)
   }
 
-  const defaultCategories = ['General', 'Disease Management', 'Market Trends', 'Weather Preparation']
-  const derived = Array.from(new Set([...(posts || []).map(p => p.category).filter(Boolean), ...defaultCategories]))
+  const derived = ['General', 'Diesease management', 'weather', 'market trend']
 
   return (
     <KeyboardAvoidingView
@@ -485,29 +562,47 @@ export default function Community() {
         <Text style={[styles.headerSubtitle, { color: muted }]}>{t('forum_sub')}</Text>
       </View>
 
-      {/* Compact compose box */}
+      {/* Collapsible Post Component */}
       <View style={[styles.composeBox, { borderColor: colors.tint + '33', backgroundColor: colorScheme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
-        <TextInput
-          style={[styles.composeInput, { color: colors.text }]}
-          placeholder={t('whats_on_your_mind')}
-          placeholderTextColor={muted}
-          value={text}
-          onChangeText={setText}
-          multiline
-          numberOfLines={2}
-        />
-        <View style={[styles.composeActions, compact && styles.composeActionsCompact]}>
-          <View style={{ flex: 1, marginRight: compact ? 0 : 8, marginBottom: compact ? 6 : 0 }}>
-            <CategoryPicker category={category} setCategory={setCategory} options={derived} />
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={toggleExpanded}
+          style={styles.collapsibleHeader}
+        >
+          <View style={styles.collapsibleHeaderLeft}>
+            <Text style={{ fontSize: 16 }}>📝</Text>
+            <Text style={[styles.collapsibleTitle, { color: colors.text }]}>{t('post_discussion') || 'Post'}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.postBtn, { backgroundColor: colors.tint }, !text.trim() && styles.postBtnDisabled]}
-            onPress={handlePost}
-            disabled={!text.trim()}
-          >
-            <Text style={styles.postBtnText}>{t('post_discussion')}</Text>
-          </TouchableOpacity>
-        </View>
+          <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
+            <Text style={[styles.collapsibleIcon, { color: colors.tint }]}>＋</Text>
+          </Animated.View>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={[styles.collapsibleContent, { borderTopColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }]}>
+            <TextInput
+              style={[styles.composeInput, { color: colors.text, marginTop: 4 }]}
+              placeholder={t('whats_on_your_mind')}
+              placeholderTextColor={muted}
+              value={text}
+              onChangeText={setText}
+              multiline
+              numberOfLines={2}
+            />
+            <View style={[styles.composeActions, compact && styles.composeActionsCompact]}>
+              <View style={{ flex: 1, marginRight: compact ? 0 : 8, marginBottom: compact ? 6 : 0 }}>
+                <CategoryPicker category={category} setCategory={setCategory} options={derived} />
+              </View>
+              <TouchableOpacity
+                style={[styles.postBtn, { backgroundColor: colors.tint }, !text.trim() && styles.postBtnDisabled]}
+                onPress={handlePost}
+                disabled={!text.trim()}
+              >
+                <Text style={styles.postBtnText}>{t('post_discussion')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Posts list */}
@@ -558,6 +653,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    zIndex: 10,
+    position: 'relative',
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  collapsibleHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  collapsibleTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  collapsibleIcon: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  collapsibleContent: {
+    marginTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
   },
   composeInput: {
     fontSize: 14,

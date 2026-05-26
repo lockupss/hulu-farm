@@ -17,11 +17,17 @@ const MAPPING = {
   'bell.fill': 'notifications',
   'person.crop.circle.fill': 'account-circle',
   'gearshape.fill': 'settings',
+  // Home page icons
+  'exclamationmark.triangle.fill': 'warning',
+  'thermometer': 'thermostat',
+  'drop.fill': 'water-drop',
+  'cloud.rain.fill': 'grain',
+  'thermometer.snowflake': 'ac-unit',
 } as IconMapping;
 
 export function IconSymbol({
   name,
-  size = 22, // consistent with your system
+  size = 22,
   color,
   style,
 }: {
@@ -36,12 +42,7 @@ export function IconSymbol({
       color={color}
       size={size}
       name={MAPPING[name]}
-      style={[
-        {
-          opacity: 0.9, // softer icon tone like iOS version
-        },
-        style,
-      ]}
+      style={style}
     />
   );
 }

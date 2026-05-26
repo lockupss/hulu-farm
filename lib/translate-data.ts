@@ -2,9 +2,12 @@
 
 const CATEGORY_TO_KEY: Record<string, string> = {
   General: 'category_general',
+  'Diesease management': 'category_disease',
   'Disease Management': 'category_disease',
-  'Market Trends': 'category_market',
+  weather: 'category_weather',
   'Weather Preparation': 'category_weather',
+  'market trend': 'category_market',
+  'Market Trends': 'category_market',
 }
 
 const COMMODITY_TO_KEY: Record<string, string> = {
