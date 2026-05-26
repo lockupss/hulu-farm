@@ -195,7 +195,7 @@ const rawTranslations: Record<Lang, Record<string, string>> = {
     settings_account_blurb: 'Sign in, profile photo, friend suggestions, follow people, and private messages — all in one place.',
     open_account_page: 'Open account & social',
     device_storage_section: 'Device ID & storage',
-    api_unreachable: 'Cannot reach the API. On your PC run: npm run api. On a phone, use the same Wi‑Fi and set EXPO_PUBLIC_API_BASE to http://YOUR_COMPUTER_IP:3333 (see .env.example).',
+    api_unreachable: 'Cannot reach the API. On your PC run: npm run api. On a phone, use the same Wi‑Fi and set EXPO_PUBLIC_API_BASE to http://YOUR_COMPUTER_IP:8000 (see .env.example).',
     server_save_failed: 'The server could not save your account. Check project data/ permissions.',
     community_highlights_title: 'Community Highlights',
     community_highlights_desc: 'Latest discussions from farmers in your region',
