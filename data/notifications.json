@@ -1,0 +1,4 @@
+[
+  { "id": 1, "text": "New weather alert: Heavy rain expected", "time": "10m" },
+  { "id": 2, "text": "Market update: Maize price up 5%", "time": "1h" }
+]

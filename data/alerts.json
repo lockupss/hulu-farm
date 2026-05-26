@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "title": "Flood Watch",
+    "detail": "Heavy rain expected in low-lying areas. Stay alert.",
+    "type": "alert",
+    "lat": 9.0,
+    "lon": 38.7,
+    "radius_km": 150
+  },
+  {
+    "id": 2,
+    "title": "Heat Advisory",
+    "detail": "High daytime temperatures expected for the next 3 days.",
+    "type": "info",
+    "lat": 8.9,
+    "lon": 39.0,
+    "radius_km": 300
+  }
+]
