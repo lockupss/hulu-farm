@@ -1,9 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, FlatList, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, LayoutAnimation, UIManager } from 'react-native'
-import { useRouter } from 'expo-router'
 import CategoryPicker from '@/components/category-picker'
 import { useToast } from '@/components/toast'
-import { Button } from '@/components/ui/Button'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { getJSON, postJSON, resolveMediaUrl } from '@/lib/api'
@@ -11,6 +7,9 @@ import { useAuth } from '@/lib/auth-context'
 import { useTranslation } from '@/lib/i18n'
 import { loadItem, saveItem } from '@/lib/storage'
 import { translateCategory } from '@/lib/translate-data'
+import { useRouter } from 'expo-router'
+import React, { useEffect, useRef, useState } from 'react'
+import { Animated, Easing, FlatList, Image, KeyboardAvoidingView, LayoutAnimation, Platform, StyleSheet, Text, TextInput, TouchableOpacity, UIManager, View, useWindowDimensions } from 'react-native'
 import forumData from '../../data/forum.json'
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -36,7 +35,6 @@ function normalizeComment(c: any, postId: any): any {
 
 function normalizePost(p: any) {
   const post = { ...p }
-  // author is a nested object from Django: { id, username, full_name, avatar }
   if (typeof p.author === 'object' && p.author !== null) {
     post.authorUserId = p.author.id
     post.authorAvatar = p.author.avatar || null
@@ -46,13 +44,11 @@ function normalizePost(p: any) {
   if (!post.time && post.created_at) post.time = post.created_at
   if (typeof post.likes !== 'number') post.likes = post.likes_count ?? 0
   post.liked = !!post.is_liked
-  // category is a nested object: { id, name, slug }
   if (typeof post.category === 'object' && post.category !== null) {
     post.category = post.category.name || 'General'
   }
   post.category = post.category || 'General'
   post.slug = post.slug || String(post.id)
-  // map Django comments → replies
   if (Array.isArray(post.comments) && (!post.replies || post.replies.length === 0)) {
     post.replies = post.comments.map((c: any) => normalizeComment(c, post.id))
   }
@@ -129,8 +125,8 @@ function InlineReplyInput({ placeholder, onSubmit, onCancel }: { placeholder: st
 
 function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
   reply: any
-  onReply: (parentId: number, text: string, parentReplyId?: number) => void
-  onLike: (postId: number, replyId?: number) => void
+  onReply: (parentId: string, text: string, parentReplyId?: string) => void
+  onLike: (postId: string, replyId?: string) => void
   onOpenProfile?: (userId: string) => void
   canInteract: boolean
 }) {
@@ -153,7 +149,6 @@ function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
     <View style={styles.replyRow}>
       <View style={styles.replyThreadLine} />
       <View style={styles.replyContent}>
-        {/* Author row */}
         <View style={styles.replyAuthorRow}>
           <View style={styles.smallAvatar}>
             {avatarUri
@@ -166,19 +161,11 @@ function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
           <Text style={styles.replyTime}> • {formatTime(reply.time)}</Text>
         </View>
 
-        {/* Reply text */}
         <Text style={styles.replyText}>{reply.text}</Text>
 
-        {/* Actions */}
         <View style={styles.replyActionsRow}>
           <TouchableOpacity
-            onPress={() => {
-              if (!canInteract) {
-                onReply(Number(reply.postId || reply.parentPostId), '', Number(reply.id))
-              } else {
-                setReplying(!replying)
-              }
-            }}
+            onPress={() => setReplying(!replying)}
             style={styles.replyActionBtn}
           >
             <Text style={styles.actionText}>💬 {t('reply')}</Text>
@@ -186,7 +173,7 @@ function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
           <LikeButton
             liked={!!reply.liked}
             count={reply.likes ?? 0}
-            onPress={() => onLike(Number(reply.postId || reply.parentPostId), Number(reply.id))}
+            onPress={() => onLike(String(reply.postId || reply.parentPostId), String(reply.id))}
           />
           {nestedCount > 0 && (
             <TouchableOpacity onPress={() => setCollapsed(!collapsed)} style={styles.replyActionBtn}>
@@ -197,19 +184,17 @@ function ReplyView({ reply, onReply, onLike, onOpenProfile, canInteract }: {
           )}
         </View>
 
-        {/* Inline reply input */}
-        {replying && canInteract && (
+        {replying && (
           <InlineReplyInput
             placeholder={t('reply_to_reply') || 'Reply to reply...'}
             onSubmit={async (text) => {
-              await onReply(Number(reply.postId || reply.parentPostId), text, Number(reply.id))
+              await onReply(String(reply.postId || reply.parentPostId), text, String(reply.id))
               setReplying(false)
             }}
             onCancel={() => setReplying(false)}
           />
         )}
 
-        {/* Nested replies */}
         {!collapsed && reply.replies?.map((r: any) => (
           <ReplyView
             key={r.id}
@@ -253,8 +238,8 @@ function ReplyList({ post, replies, onReply, onLike, onOpenProfile, canInteract 
 
 function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
   item: any
-  onReply: (id: number, text: string, parentReplyId?: number) => void
-  onLike: (id: number, replyId?: number) => void
+  onReply: (id: string, text: string, parentReplyId?: string) => void
+  onLike: (id: string, replyId?: string) => void
   onOpenProfile?: (userId: string) => void
   canInteract: boolean
 }) {
@@ -276,7 +261,6 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
 
   return (
     <View style={styles.postCard}>
-      {/* Category badge + title */}
       <View style={styles.postHeaderRow}>
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryBadgeText}>{translateCategory(item.category, t)}</Text>
@@ -285,7 +269,6 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
 
       <Text style={styles.postTitle} numberOfLines={2}>{item.title || item.text?.slice(0, 60)}</Text>
 
-      {/* Author */}
       <View style={styles.postAuthorRow}>
         <View style={styles.avatar}>
           {avatarUri
@@ -298,26 +281,17 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
         <Text style={styles.postTime}> • {formatTime(item.time)}</Text>
       </View>
 
-      {/* Body */}
       <Text style={styles.postBody}>{item.content || item.text}</Text>
 
-      {/* Attachments */}
       {item.attachments?.map((a: any) => (
         <TouchableOpacity key={a.url}>
           <Text style={styles.attachmentLink}>{a.name || a.url}</Text>
         </TouchableOpacity>
       ))}
 
-      {/* Action bar */}
       <View style={[styles.postActionsRow, compact && styles.postActionsRowCompact]}>
         <TouchableOpacity
-          onPress={() => {
-            if (!canInteract) {
-              onReply(Number(item.id), '')
-            } else {
-              setReplying(!replying)
-            }
-          }}
+          onPress={() => setReplying(!replying)}
           style={styles.actionBtn}
         >
           <Text style={styles.actionText}>💬 {replyCount} {replyCount === 1 ? 'reply' : 'replies'}</Text>
@@ -325,23 +299,21 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
         <LikeButton
           liked={!!item.liked}
           count={item.likes ?? 0}
-          onPress={() => onLike(Number(item.id))}
+          onPress={() => onLike(String(item.id))}
         />
       </View>
 
-      {/* Inline reply input */}
-      {replying && canInteract && (
+      {replying && (
         <InlineReplyInput
           placeholder={t('write_reply') || 'Write a reply...'}
           onSubmit={async (text) => {
-            await onReply(Number(item.id), text)
+            await onReply(String(item.id), text)
             setReplying(false)
           }}
           onCancel={() => setReplying(false)}
         />
       )}
 
-      {/* Replies list */}
       <ReplyList
         post={item}
         replies={item.replies || []}
@@ -363,14 +335,15 @@ export default function Community() {
   const muted = colorScheme === 'dark' ? '#9CA3AF' : '#6B7280'
   const { showToast } = useToast()
   const router = useRouter()
-  const { token, user, isSignedIn } = useAuth()
+  const { token, user, isSignedIn, loading: authLoading } = useAuth()
   const [posts, setPosts] = useState<any[]>([])
+  // Keep a ref so likePost / replyToPost always see the latest posts
+  const postsRef = useRef<any[]>([])
   const [text, setText] = useState('')
   const [category, setCategory] = useState('General')
   const [loading, setLoading] = useState(true)
   const [likedIds, setLikedIds] = useState<Record<string, boolean>>({})
 
-  // Collapsible Compose Box States
   const [isExpanded, setIsExpanded] = useState(false)
   const rotateAnim = useRef(new Animated.Value(0)).current
 
@@ -390,17 +363,22 @@ export default function Community() {
     outputRange: ['0deg', '45deg']
   })
 
+  // Keep postsRef in sync with posts state
+  const updatePosts = (next: any[]) => {
+    postsRef.current = next
+    setPosts(next)
+  }
+
   useEffect(() => {
     ;(async () => {
       try {
-        // Django returns paginated { count, next, previous, results: [...] }
         const remote = await getJSON('/api/v1/forum/posts/')
         const list = Array.isArray(remote) ? remote : (remote?.results || [])
-        setPosts(list.map((p: any) => normalizePost(p)))
+        updatePosts(list.map((p: any) => normalizePost(p)))
       } catch (_err) {
         const stored = await loadItem('forum_posts')
-        if (stored) setPosts((stored || []).map((p: any) => normalizePost(p)))
-        else setPosts((forumData || []).map((p: any) => normalizePost(p)))
+        if (stored) updatePosts((stored || []).map((p: any) => normalizePost(p)))
+        else updatePosts((forumData || []).map((p: any) => normalizePost(p)))
       } finally {
         setLoading(false)
       }
@@ -412,11 +390,24 @@ export default function Community() {
   }, [lang])
 
   const userId = user?.id ?? null
+
+  // FIX: don't treat user as not signed in while auth is still loading
   const canInteract = isSignedIn && !!token
+
+  const requireAuth = (): boolean => {
+    if (authLoading) return false // still loading — do nothing
+    if (!canInteract) {
+      showToast(t('sign_in_to_interact') || 'Sign in to like or reply', 'error')
+      router.push('/login')
+      return false
+    }
+    return true
+  }
 
   const openProfile = (uid: string) => { router.push(`/user/${uid}`) }
 
   const handlePost = async () => {
+    if (authLoading) return
     if (!canInteract) {
       showToast(t('sign_in_to_post') || 'Sign in to post', 'error')
       router.push('/login')
@@ -438,49 +429,50 @@ export default function Community() {
       category,
       slug: String(timestamp),
     }
-    const prevPosts = posts
-    const next = [newPost, ...posts]
-    setPosts(next)
-    await saveItem('forum_posts', next)
+    const prevPosts = postsRef.current
+    updatePosts([newPost, ...prevPosts])
+    await saveItem('forum_posts', [newPost, ...prevPosts])
     toggleExpanded()
     try {
-      // Django PostWriteSerializer expects: title, body, status, category_id (optional)
       const created = await postJSON('/api/v1/forum/posts/', {
         title: text.slice(0, 60) || 'Post',
         body: text,
         status: 'published',
       }, token)
-      // Replace the optimistic post with the real one from server (has real id + slug)
       if (created?.id) {
-        setPosts(prev => [normalizePost(created), ...prev.filter(p => p.id !== timestamp)])
-        await saveItem('forum_posts', [normalizePost(created), ...prevPosts])
+        const next = [normalizePost(created), ...prevPosts]
+        updatePosts(next)
+        await saveItem('forum_posts', next)
       }
-    } catch {
-      showToast(t('register_failed') || 'Post failed. Check you are online and signed in.', 'error')
-      setPosts(prevPosts)
+    } catch (e: any) {
+      showToast(e?.message || 'Post failed. Check you are online and signed in.', 'error')
+      updatePosts(prevPosts)
       await saveItem('forum_posts', prevPosts)
     }
     setText('')
   }
 
-  const likePost = async (postId: number, replyId?: number) => {
-    if (!canInteract || !userId) {
-      showToast(t('sign_in_to_interact') || 'Sign in to like or reply', 'error')
-      router.push('/login')
-      return
-    }
-    const idKey = replyId ? `${postId}:${replyId}` : `${postId}`
+  const likePost = async (postId: string, replyId?: string) => {
+    // FIX: don't redirect while auth is still loading
+    if (!requireAuth()) return
+
+    const idKey = replyId ? `${postId}:${replyId}` : `${String(postId)}`
     const currentlyLiked = !!likedIds[idKey]
     const optimisticLiked = !currentlyLiked
+
     const toggleLocal = (postsArr: any[]) => postsArr.map(p => {
       if (String(p.id) !== String(postId)) return p
       const copy = { ...p }
       if (replyId) {
         const updateReplyRec = (replies: any[]) => {
-          if (!replies) return
-          for (let r of replies) {
-            if (String(r.id) === String(replyId)) { r.likes = (r.likes || 0) + (optimisticLiked ? 1 : -1); r.liked = optimisticLiked; return true }
-            if (r.replies) { const found = updateReplyRec(r.replies); if (found) return true }
+          if (!replies) return false
+          for (const r of replies) {
+            if (String(r.id) === String(replyId)) {
+              r.likes = (r.likes || 0) + (optimisticLiked ? 1 : -1)
+              r.liked = optimisticLiked
+              return true
+            }
+            if (r.replies && updateReplyRec(r.replies)) return true
           }
           return false
         }
@@ -491,58 +483,68 @@ export default function Community() {
       }
       return copy
     })
-    const prevPosts = posts
-    const nextPosts = toggleLocal(posts)
-    setPosts(nextPosts)
+
+    const prevPosts = postsRef.current
+    updatePosts(toggleLocal(prevPosts))
     const nextLiked = { ...likedIds, [idKey]: optimisticLiked }
     setLikedIds(nextLiked)
     await saveItem('liked_ids', nextLiked)
+
     try {
-      // Django uses slug in the URL and returns { liked, likes_count }
-      const targetPost = posts.find(p => String(p.id) === String(postId))
-      const postSlug = targetPost?.slug || String(postId)
-      const res = await postJSON(`/api/v1/forum/posts/${postSlug}/like/`, {}, token)
+      let res: any
+      if (replyId) {
+        // FIX: comment likes use the comment pk endpoint, not the post slug endpoint
+        res = await postJSON(`/api/v1/forum/comments/${replyId}/like/`, {}, token)
+      } else {
+        // FIX: use postsRef so we always get the latest slug, not stale closure
+        const targetPost = postsRef.current.find(p => String(p.id) === String(postId))
+        const postSlug = targetPost?.slug || String(postId)
+        res = await postJSON(`/api/v1/forum/posts/${postSlug}/like/`, {}, token)
+      }
+
       const newLikes = res.likes_count ?? res.likes
       const liked = !!res.liked
-      const reconciled = posts.map(p => {
+
+      const reconciled = postsRef.current.map(p => {
         if (String(p.id) !== String(postId)) return p
         const copy = { ...p }
         if (replyId) {
           const updateReplyRec = (replies: any[]) => {
-            if (!replies) return
-            for (let r of replies) {
+            if (!replies) return false
+            for (const r of replies) {
               if (String(r.id) === String(replyId)) { r.likes = newLikes; r.liked = liked; return true }
-              if (r.replies) { const found = updateReplyRec(r.replies); if (found) return true }
+              if (r.replies && updateReplyRec(r.replies)) return true
             }
             return false
           }
           updateReplyRec(copy.replies)
-        } else { copy.likes = newLikes; copy.liked = liked }
+        } else {
+          copy.likes = newLikes
+          copy.liked = liked
+        }
         return copy
       })
-      setPosts(reconciled)
+
+      updatePosts(reconciled)
       const finalLiked = { ...likedIds, [idKey]: liked }
       setLikedIds(finalLiked)
       await saveItem('liked_ids', finalLiked)
       showToast(liked ? (t('like_success') || 'Liked') : (t('unlike_success') || 'Unliked'), 'success')
       await saveItem('forum_posts', reconciled)
-    } catch {
-      setPosts(prevPosts)
-      const rolledBack = { ...likedIds }
-      rolledBack[idKey] = currentlyLiked
+    } catch (e: any) {
+      // Roll back optimistic update
+      updatePosts(prevPosts)
+      const rolledBack = { ...likedIds, [idKey]: currentlyLiked }
       setLikedIds(rolledBack)
       await saveItem('liked_ids', rolledBack)
-      showToast('Failed to update like. Please try again.', 'error')
+      showToast(e?.message || 'Failed to update like. Please try again.', 'error')
     }
   }
 
-  const replyToPost = async (id: number, replyText: string, parentReplyId?: number) => {
-    if (!canInteract || !token) {
-      showToast(t('sign_in_to_interact') || 'Sign in to reply', 'error')
-      router.push('/login')
-      return
-    }
+  const replyToPost = async (id: string, replyText: string, parentReplyId?: string) => {
+    if (!requireAuth()) return
     if (!replyText.trim()) return
+
     const reply = {
       id: Date.now(),
       author: user?.displayName || 'You',
@@ -554,51 +556,52 @@ export default function Community() {
       parentReplyId,
       replies: [],
       likes: 0,
-      liked_by: []
+      liked_by: [],
     }
+
     try {
-      // Django: POST /api/v1/forum/posts/<slug>/comments/ with { body, parent? }
-      const replyPost = posts.find(p => String(p.id) === String(id))
+      // FIX: use postsRef so slug lookup always works, never stale
+      const replyPost = postsRef.current.find(p => String(p.id) === String(id))
       const replySlug = replyPost?.slug || String(id)
+
+      // Send post id in body — CommentSerializer has 'post' as writable so DRF
+      // validates it before perform_create can set it from the URL slug.
       await postJSON(`/api/v1/forum/posts/${replySlug}/comments/`, {
+        post: replyPost?.id,
         body: replyText,
-        ...(parentReplyId ? { parent: parentReplyId } : {}),
+        ...(parentReplyId ? { parent: Number(parentReplyId) } : {}),
       }, token)
+
       showToast('Reply posted', 'success')
 
-      const addReplyToPostLocal = (postsArr: any[]) => postsArr.map(p => {
+      const addReplyLocal = (postsArr: any[]) => postsArr.map(p => {
         if (String(p.id) !== String(id)) return p
         const copy = { ...p }
         if (parentReplyId) {
-          const updateRepliesRec = (repliesList: any[]) => {
+          const insertRec = (repliesList: any[]): boolean => {
             if (!repliesList) return false
             for (let i = 0; i < repliesList.length; i++) {
               if (String(repliesList[i].id) === String(parentReplyId)) {
                 repliesList[i].replies = [reply, ...(repliesList[i].replies || [])]
                 return true
               }
-              if (repliesList[i].replies) {
-                const found = updateRepliesRec(repliesList[i].replies)
-                if (found) return true
-              }
+              if (repliesList[i].replies && insertRec(repliesList[i].replies)) return true
             }
             return false
           }
-          const updated = updateRepliesRec(copy.replies)
-          if (!updated) {
-            copy.replies = [reply, ...(copy.replies || [])]
-          }
+          if (!insertRec(copy.replies)) copy.replies = [reply, ...(copy.replies || [])]
         } else {
           copy.replies = [reply, ...(copy.replies || [])]
         }
         return copy
       })
 
-      const next = addReplyToPostLocal(posts)
-      setPosts(next)
+      const next = addReplyLocal(postsRef.current)
+      updatePosts(next)
       await saveItem('forum_posts', next)
-    } catch {
-      showToast('Failed to post reply', 'error')
+    } catch (e: any) {
+      // FIX: show the actual error so you know what went wrong
+      showToast(e?.message || 'Failed to post reply', 'error')
     }
   }
 
@@ -610,13 +613,11 @@ export default function Community() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>{t('forum')}</Text>
         <Text style={[styles.headerSubtitle, { color: muted }]}>{t('forum_sub')}</Text>
       </View>
 
-      {/* Collapsible Post Component */}
       <View style={[styles.composeBox, { borderColor: colors.tint + '33', backgroundColor: colorScheme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
         <TouchableOpacity
           activeOpacity={0.7}
@@ -659,7 +660,6 @@ export default function Community() {
         )}
       </View>
 
-      {/* Posts list */}
       {loading ? (
         <View style={{ padding: 24, alignItems: 'center' }}>
           <Text style={{ color: muted }}>{t('loading')}</Text>
@@ -694,13 +694,9 @@ export default function Community() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
-  // Header
   header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   headerTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
   headerSubtitle: { fontSize: 13, marginTop: 2 },
-
-  // Compact compose
   composeBox: {
     marginHorizontal: 16,
     marginBottom: 10,
@@ -722,67 +718,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
-  collapsibleHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  collapsibleTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-  collapsibleIcon: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  collapsibleContent: {
-    marginTop: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
-  },
-  composeInput: {
-    fontSize: 14,
-    minHeight: 52,
-    textAlignVertical: 'top',
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
-  composeActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  composeActionsCompact: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-  },
-  postBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  collapsibleHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collapsibleTitle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  collapsibleIcon: { fontSize: 18, fontWeight: '600' },
+  collapsibleContent: { marginTop: 6, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8 },
+  composeInput: { fontSize: 14, minHeight: 52, textAlignVertical: 'top', paddingHorizontal: 4, paddingVertical: 4 },
+  composeActions: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  composeActionsCompact: { flexDirection: 'column', alignItems: 'stretch' },
+  postBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   postBtnDisabled: { opacity: 0.45 },
   postBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-
-  // Post card
-  postCard: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  postHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  categoryBadge: {
-    backgroundColor: '#EBF5FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-  },
+  postCard: { paddingHorizontal: 16, paddingVertical: 14 },
+  postHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  categoryBadge: { backgroundColor: '#EBF5FF', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   categoryBadgeText: { fontSize: 11, fontWeight: '600', color: '#1D6FA4' },
   postTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 6, lineHeight: 20 },
   postAuthorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
@@ -792,17 +740,12 @@ const styles = StyleSheet.create({
   postTime: { fontSize: 12, color: '#9CA3AF' },
   postBody: { fontSize: 14, color: '#4B5563', lineHeight: 20, marginBottom: 10 },
   attachmentLink: { color: '#0366d6', marginTop: 4, fontSize: 13 },
-
-  // Post actions
   postActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   postActionsRowCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   actionBtn: { flexDirection: 'row', alignItems: 'center' },
   actionText: { fontSize: 12, color: '#6b7280' },
-
-  // Reply thread
   showRepliesBtn: { paddingVertical: 4 },
   showRepliesText: { fontSize: 12, color: '#0366d6', fontWeight: '600' },
-
   replyRow: { flexDirection: 'row', marginTop: 10 },
   replyThreadLine: { width: 2, backgroundColor: '#E5E7EB', marginRight: 10, borderRadius: 1 },
   replyContent: { flex: 1 },
@@ -814,22 +757,8 @@ const styles = StyleSheet.create({
   replyText: { fontSize: 13, color: '#4B5563', lineHeight: 18, marginBottom: 4 },
   replyActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   replyActionBtn: { paddingVertical: 2 },
-
-  // Inline reply input
-  inlineReplyBox: {
-    marginTop: 8,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 8,
-  },
-  inlineReplyInput: {
-    fontSize: 13,
-    color: '#111827',
-    minHeight: 44,
-    textAlignVertical: 'top',
-  },
+  inlineReplyBox: { marginTop: 8, backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', padding: 8 },
+  inlineReplyInput: { fontSize: 13, color: '#111827', minHeight: 44, textAlignVertical: 'top' },
   inlineReplyActions: { flexDirection: 'row', gap: 8, marginTop: 6, justifyContent: 'flex-end' },
   inlineBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 6 },
   inlineBtnPrimary: { backgroundColor: '#16A34A' },
