@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "author": "Abebe Kebede",
+    "title": "Best practices for disease prevention",
+    "content": "I've been using crop rotation and resistant varieties successfully. What works for you?",
+    "replies": 12,
+    "likes": 34,
+    "time": "2 hours ago",
+    "category": "Disease Management"
+  },
+  {
+    "id": 2,
+    "author": "Marta Alemu",
+    "title": "When is the best time to sell my harvest?",
+    "content": "Prices seem to fluctuate. Looking for advice on optimal timing.",
+    "replies": 8,
+    "likes": 21,
+    "time": "4 hours ago",
+    "category": "Market Trends"
+  },
+  {
+    "id": 3,
+    "author": "Tadesse Wolde",
+    "title": "Preparing for the rainy season",
+    "content": "Tips on preparing farms and irrigation systems before heavy rains?",
+    "replies": 15,
+    "likes": 45,
+    "time": "6 hours ago",
+    "category": "Weather Preparation"
+  }
+]

@@ -1,0 +1,5 @@
+# Ignore imported Next.js code and other generated assets
+imported_code/
+.env
+node_modules/
+dist/
