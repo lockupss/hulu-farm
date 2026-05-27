@@ -375,7 +375,7 @@ function PostCard({ item, onReply, onLike, onOpenProfile, onReport, canInteract,
 }) {
   const { t } = useTranslation()
   const [replying, setReplying] = useState(false)
-  const [showReplies, setShowReplies] = useState(false)
+  const [showReplies, setShowReplies] = useState(true)
   const [avatarUri, setAvatarUri] = useState<string | null>(null)
 
   const border = dark ? '#2F3336' : '#EFF3F4'
@@ -645,19 +645,50 @@ export default function Community() {
   const [selectedPost, setSelectedPost] = useState<any | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
+  // Keep the detail modal in sync whenever the posts list refreshes
+  useEffect(() => {
+    if (!selectedPost) return
+    const updated = posts.find(p => String(p.id) === String(selectedPost.id))
+    if (updated) setSelectedPost(updated)
+  }, [posts])
+
   const updatePosts = useCallback((next: any[]) => {
     postsRef.current = next
     setPosts(next)
   }, [])
 
+  const fetchPostsWithComments = useCallback(async () => {
+    const remote = await getJSON('/api/v1/forum/posts/')
+    const list = Array.isArray(remote) ? remote : (remote?.results || [])
+    const normalized = list.map((p: any) => normalizePost(p))
+    const withComments = await Promise.all(
+      normalized.map(async (p: any) => {
+        try {
+          const fresh = await getJSON(`/api/v1/forum/posts/${p.slug}/comments/`)
+          const comments = Array.isArray(fresh) ? fresh : (fresh?.results || [])
+          return { ...p, replies: comments.map((c: any) => normalizeComment(c, p.id)) }
+        } catch {
+          return p
+        }
+      })
+    )
+    return withComments
+  }, [])
+
+  const refreshFeed = useCallback(async () => {
+    try {
+      const withComments = await fetchPostsWithComments()
+      updatePosts(withComments)
+      await saveItem('forum_posts', withComments)
+    } catch { /* keep existing posts on network error */ }
+  }, [fetchPostsWithComments, updatePosts])
+
   useEffect(() => {
     ;(async () => {
       try {
-        const remote = await getJSON('/api/v1/forum/posts/')
-        const list = Array.isArray(remote) ? remote : (remote?.results || [])
-        const normalized = list.map((p: any) => normalizePost(p))
-        updatePosts(normalized)
-        await saveItem('forum_posts', normalized)
+        const withComments = await fetchPostsWithComments()
+        updatePosts(withComments)
+        await saveItem('forum_posts', withComments)
       } catch {
         const stored = await loadItem('forum_posts')
         if (stored) updatePosts((stored || []).map((p: any) => normalizePost(p)))
@@ -670,7 +701,7 @@ export default function Community() {
       const saved = await loadItem('liked_ids')
       if (saved) setLikedIds(saved)
     })()
-  }, [lang, updatePosts])
+  }, [lang, fetchPostsWithComments, updatePosts])
 
   const canInteract = isSignedIn && !!token
 
@@ -713,6 +744,7 @@ export default function Community() {
         created = await postJSON('/api/v1/forum/posts/', { title: text.slice(0, 60) || 'Post', body: text, status: 'published' }, token)
       }
       if (created?.id) { const next = [normalizePost(created), ...prev]; updatePosts(next); await saveItem('forum_posts', next) }
+      await refreshFeed()
     } catch (e: any) {
       showToast(e?.message || 'Post failed', 'error')
       updatePosts(prev); await saveItem('forum_posts', prev)
@@ -772,6 +804,7 @@ export default function Community() {
       })
       updatePosts(reconciled)
       const fl = { ...likedIds, [idKey]: liked }; setLikedIds(fl); await saveItem('liked_ids', fl)
+      await refreshFeed()
     } catch (e: any) {
       updatePosts(prev); const rb = { ...likedIds, [idKey]: currentlyLiked }; setLikedIds(rb); await saveItem('liked_ids', rb)
       showToast(e?.message || 'Failed to update like', 'error')
@@ -798,10 +831,18 @@ export default function Community() {
         const list = Array.isArray(fresh) ? fresh : (fresh?.results || [])
         const next = postsRef.current.map(p => p.id === id ? { ...p, replies: list.map((c: any) => normalizeComment(c, p.id)) } : p)
         updatePosts(next); await saveItem('forum_posts', next)
+        // keep modal post in sync
+        setSelectedPost((sel: any) => sel && String(sel.id) === String(id)
+          ? { ...sel, replies: list.map((c: any) => normalizeComment(c, sel.id)) }
+          : sel)
       } catch {
         const next = postsRef.current.map(p => p.id === id ? { ...p, replies: [reply, ...(p.replies || [])] } : p)
         updatePosts(next); await saveItem('forum_posts', next)
+        setSelectedPost((sel: any) => sel && String(sel.id) === String(id)
+          ? { ...sel, replies: [reply, ...(sel.replies || [])] }
+          : sel)
       }
+      await refreshFeed()
     } catch (e: any) { showToast(e?.message || 'Failed to post reply', 'error') }
   }
 
