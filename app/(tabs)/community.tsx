@@ -374,8 +374,12 @@ export default function Community() {
       try {
         const remote = await getJSON('/api/v1/forum/posts/')
         const list = Array.isArray(remote) ? remote : (remote?.results || [])
-        updatePosts(list.map((p: any) => normalizePost(p)))
+        const normalized = list.map((p: any) => normalizePost(p))
+        updatePosts(normalized)
+        // Cache for offline fallback only — never used as source of truth
+        await saveItem('forum_posts', normalized)
       } catch (_err) {
+        // Offline fallback — show cached or seed data
         const stored = await loadItem('forum_posts')
         if (stored) updatePosts((stored || []).map((p: any) => normalizePost(p)))
         else updatePosts((forumData || []).map((p: any) => normalizePost(p)))
@@ -530,7 +534,6 @@ export default function Community() {
       setLikedIds(finalLiked)
       await saveItem('liked_ids', finalLiked)
       showToast(liked ? (t('like_success') || 'Liked') : (t('unlike_success') || 'Unliked'), 'success')
-      await saveItem('forum_posts', reconciled)
     } catch (e: any) {
       // Roll back optimistic update
       updatePosts(prevPosts)
@@ -569,36 +572,33 @@ export default function Community() {
       await postJSON(`/api/v1/forum/posts/${replySlug}/comments/`, {
         post: replyPost?.id,
         body: replyText,
-        ...(parentReplyId ? { parent: Number(parentReplyId) } : {}),
+        ...(parentReplyId ? { parent: parentReplyId } : {}),
       }, token)
 
       showToast('Reply posted', 'success')
 
-      const addReplyLocal = (postsArr: any[]) => postsArr.map(p => {
-        if (String(p.id) !== String(id)) return p
-        const copy = { ...p }
-        if (parentReplyId) {
-          const insertRec = (repliesList: any[]): boolean => {
-            if (!repliesList) return false
-            for (let i = 0; i < repliesList.length; i++) {
-              if (String(repliesList[i].id) === String(parentReplyId)) {
-                repliesList[i].replies = [reply, ...(repliesList[i].replies || [])]
-                return true
-              }
-              if (repliesList[i].replies && insertRec(repliesList[i].replies)) return true
-            }
-            return false
-          }
-          if (!insertRec(copy.replies)) copy.replies = [reply, ...(copy.replies || [])]
-        } else {
+      // Reload the post's comments from server so they persist across users/sessions
+      try {
+        const freshComments = await getJSON(`/api/v1/forum/posts/${replySlug}/comments/`, token)
+        const commentsList = Array.isArray(freshComments) ? freshComments : (freshComments?.results || [])
+        const next = postsRef.current.map(p => {
+          if (String(p.id) !== String(id)) return p
+          return { ...p, replies: commentsList.map((c: any) => normalizeComment(c, p.id)) }
+        })
+        updatePosts(next)
+        await saveItem('forum_posts', next)
+      } catch {
+        // Fallback: optimistic local insert if reload fails
+        const addReplyLocal = (postsArr: any[]) => postsArr.map(p => {
+          if (String(p.id) !== String(id)) return p
+          const copy = { ...p }
           copy.replies = [reply, ...(copy.replies || [])]
-        }
-        return copy
-      })
-
-      const next = addReplyLocal(postsRef.current)
-      updatePosts(next)
-      await saveItem('forum_posts', next)
+          return copy
+        })
+        const next = addReplyLocal(postsRef.current)
+        updatePosts(next)
+        await saveItem('forum_posts', next)
+      }
     } catch (e: any) {
       // FIX: show the actual error so you know what went wrong
       showToast(e?.message || 'Failed to post reply', 'error')
