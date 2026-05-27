@@ -1,13 +1,14 @@
 import { useToast } from '@/components/toast'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import { getJSON, patchJSON } from '@/lib/api'
+import { deleteJSON, getJSON, patchJSON, postJSON } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useState } from 'react'
 import {
-    ActivityIndicator, FlatList, ScrollView, StyleSheet,
-    Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator,
+  FlatList, Modal, ScrollView, StyleSheet,
+  Text, TextInput, TouchableOpacity, View
 } from 'react-native'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -51,9 +52,51 @@ function StatCard({ label, count, color }: { label: string; count: number; color
   )
 }
 
+function ConfirmModal({
+  visible,
+  title,
+  message,
+  confirmLabel,
+  confirmColor,
+  onConfirm,
+  onCancel,
+}: {
+  visible: boolean
+  title: string
+  message: string
+  confirmLabel: string
+  confirmColor: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalBox}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalMessage}>{message}</Text>
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={onCancel}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalConfirmBtn, { backgroundColor: confirmColor }]}
+              onPress={onConfirm}
+            >
+              <Text style={styles.modalConfirmText}>{confirmLabel}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 function ReportCard({
   report,
   onUpdate,
+  onPostDeleted,
+  onUserRestricted,
   token,
   colors,
   muted,
@@ -62,6 +105,8 @@ function ReportCard({
 }: {
   report: Report
   onUpdate: (id: string, status: string, note: string) => void
+  onPostDeleted: (targetId: string) => void
+  onUserRestricted: (reporterName: string, restricted: boolean) => void
   token: string | null
   colors: any
   muted: string
@@ -73,6 +118,12 @@ function ReportCard({
   const [status, setStatus] = useState(report.status)
   const [note, setNote] = useState(report.admin_note || '')
   const [saving, setSaving] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+
+  // Confirm modals
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmRestrict, setConfirmRestrict] = useState(false)
+  const [restrictedUsers, setRestrictedUsers] = useState<Record<string, boolean>>({})
 
   const handleSave = async () => {
     setSaving(true)
@@ -88,6 +139,50 @@ function ReportCard({
     }
   }
 
+  const handleDeletePost = async () => {
+    setConfirmDelete(false)
+    setActionLoading(true)
+    try {
+      if (report.target_type === 'post') {
+        // target_id is the post slug
+        await deleteJSON(`/api/v1/auth/admin/posts/${report.target_id}/`, token)
+        showToast('Post deleted successfully', 'success')
+        onPostDeleted(report.target_id)
+        // Auto-resolve the report
+        await patchJSON(`/api/v1/reports/admin/${report.id}/`, { status: 'resolved', admin_note: note || 'Post deleted by admin.' }, token)
+        onUpdate(report.id, 'resolved', note || 'Post deleted by admin.')
+      } else if (report.target_type === 'comment') {
+        await deleteJSON(`/api/v1/auth/admin/comments/${report.target_id}/`, token)
+        showToast('Comment deleted successfully', 'success')
+        onPostDeleted(report.target_id)
+        await patchJSON(`/api/v1/reports/admin/${report.id}/`, { status: 'resolved', admin_note: note || 'Comment deleted by admin.' }, token)
+        onUpdate(report.id, 'resolved', note || 'Comment deleted by admin.')
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to delete', 'error')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleRestrictUser = async () => {
+    setConfirmRestrict(false)
+    setActionLoading(true)
+    try {
+      const res = await postJSON(`/api/v1/auth/admin/users/${report.reporter_name}/restrict/`, {}, token)
+      const isNowRestricted = !res.is_active
+      setRestrictedUsers(prev => ({ ...prev, [report.reporter_name]: isNowRestricted }))
+      onUserRestricted(report.reporter_name, isNowRestricted)
+      showToast(res.detail, 'success')
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to update user', 'error')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const isRestricted = restrictedUsers[report.reporter_name] ?? false
+
   const timeAgo = (iso: string) => {
     const diff = Date.now() - new Date(iso).getTime()
     const mins = Math.floor(diff / 60000)
@@ -97,108 +192,176 @@ function ReportCard({
     return `${Math.floor(hrs / 24)}d ago`
   }
 
+  const canDeleteContent = report.target_type === 'post' || report.target_type === 'comment'
+
   return (
-    <View style={[styles.reportCard, { backgroundColor: cardBg, borderColor: border }]}>
-      {/* Header row */}
-      <TouchableOpacity onPress={() => setExpanded(!expanded)} style={styles.reportHeader}>
-        <View style={styles.reportHeaderLeft}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[status] || '#6B7280' }]} />
-          <View>
-            <Text style={[styles.reportReason, { color: colors.text }]}>
-              {report.reason.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}
-              {'  '}
-              <Text style={[styles.reportTarget, { color: muted }]}>
-                on {report.target_type}
-              </Text>
-            </Text>
-            <Text style={[styles.reportMeta, { color: muted }]}>
-              by {report.reporter_name} · {timeAgo(report.created_at)}
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.chevron, { color: muted }]}>{expanded ? '▲' : '▼'}</Text>
-      </TouchableOpacity>
+    <>
+      <ConfirmModal
+        visible={confirmDelete}
+        title={`Delete ${report.target_type}?`}
+        message={`This will permanently delete this ${report.target_type} and cannot be undone. The report will be auto-resolved.`}
+        confirmLabel="Delete"
+        confirmColor="#EF4444"
+        onConfirm={handleDeletePost}
+        onCancel={() => setConfirmDelete(false)}
+      />
+      <ConfirmModal
+        visible={confirmRestrict}
+        title={isRestricted ? 'Unrestrict user?' : 'Restrict user?'}
+        message={
+          isRestricted
+            ? `This will reactivate ${report.reporter_name}'s account and restore their access.`
+            : `This will deactivate ${report.reporter_name}'s account. They will not be able to log in until unrestricted.`
+        }
+        confirmLabel={isRestricted ? 'Unrestrict' : 'Restrict'}
+        confirmColor={isRestricted ? '#10B981' : '#F59E0B'}
+        onConfirm={handleRestrictUser}
+        onCancel={() => setConfirmRestrict(false)}
+      />
 
-      {/* Expanded detail */}
-      {expanded && (
-        <View style={[styles.reportDetail, { borderTopColor: border }]}>
-          {/* Content preview */}
-          {!!report.target_preview && (
-            <View style={[styles.previewBox, { borderColor: border }]}>
-              <Text style={[styles.previewLabel, { color: muted }]}>Reported content</Text>
-              <Text style={[styles.previewText, { color: colors.text }]}>{report.target_preview}</Text>
-            </View>
-          )}
-
-          {/* Reporter description */}
-          {!!report.description && (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={[styles.fieldLabel, { color: muted }]}>Reporter's note</Text>
-              <Text style={[styles.fieldValue, { color: colors.text }]}>{report.description}</Text>
-            </View>
-          )}
-
-          {/* Target ID */}
-          <View style={{ marginBottom: 12 }}>
-            <Text style={[styles.fieldLabel, { color: muted }]}>Target ID</Text>
-            <Text style={[styles.fieldValue, { color: colors.text, fontSize: 11 }]}>{report.target_id}</Text>
-          </View>
-
-          {/* Status picker */}
-          <Text style={[styles.fieldLabel, { color: muted }]}>Update status</Text>
-          <View style={styles.statusRow}>
-            {STATUS_OPTIONS.map(s => (
-              <TouchableOpacity
-                key={s}
-                style={[
-                  styles.statusChip,
-                  { borderColor: STATUS_COLORS[s] },
-                  status === s && { backgroundColor: STATUS_COLORS[s] },
-                ]}
-                onPress={() => setStatus(s)}
-              >
-                <Text style={[
-                  styles.statusChipText,
-                  { color: status === s ? '#fff' : STATUS_COLORS[s] },
-                ]}>
-                  {s}
+      <View style={[styles.reportCard, { backgroundColor: cardBg, borderColor: border }]}>
+        {/* Header row */}
+        <TouchableOpacity onPress={() => setExpanded(!expanded)} style={styles.reportHeader}>
+          <View style={styles.reportHeaderLeft}>
+            <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS[status] || '#6B7280' }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.reportReason, { color: colors.text }]}>
+                {report.reason.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())}
+                {'  '}
+                <Text style={[styles.reportTarget, { color: muted }]}>
+                  on {report.target_type}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </Text>
+              <Text style={[styles.reportMeta, { color: muted }]}>
+                by {report.reporter_name} · {timeAgo(report.created_at)}
+              </Text>
+            </View>
           </View>
+          <Text style={[styles.chevron, { color: muted }]}>{expanded ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
 
-          {/* Admin note */}
-          <Text style={[styles.fieldLabel, { color: muted, marginTop: 12 }]}>Admin note</Text>
-          <TextInput
-            style={[styles.noteInput, { color: colors.text, borderColor: border }]}
-            placeholder="Add a note about this report..."
-            placeholderTextColor={muted}
-            value={note}
-            onChangeText={setNote}
-            multiline
-            numberOfLines={3}
-          />
+        {/* Expanded detail */}
+        {expanded && (
+          <View style={[styles.reportDetail, { borderTopColor: border }]}>
 
-          {/* Save button */}
-          <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: colors.tint }, saving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={styles.saveBtnText}>Save changes</Text>
-            }
-          </TouchableOpacity>
+            {/* Content preview */}
+            {!!report.target_preview && (
+              <View style={[styles.previewBox, { borderColor: border }]}>
+                <Text style={[styles.previewLabel, { color: muted }]}>Reported content</Text>
+                <Text style={[styles.previewText, { color: colors.text }]}>{report.target_preview}</Text>
+              </View>
+            )}
 
-          {report.reviewer_name && (
-            <Text style={[styles.reviewedBy, { color: muted }]}>
-              Last reviewed by {report.reviewer_name}
-            </Text>
-          )}
-        </View>
-      )}
-    </View>
+            {/* Reporter description */}
+            {!!report.description && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.fieldLabel, { color: muted }]}>Reporter's note</Text>
+                <Text style={[styles.fieldValue, { color: colors.text }]}>{report.description}</Text>
+              </View>
+            )}
+
+            {/* Target ID */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[styles.fieldLabel, { color: muted }]}>Target ID</Text>
+              <Text style={[styles.fieldValue, { color: colors.text, fontSize: 11 }]}>{report.target_id}</Text>
+            </View>
+
+            {/* ── Admin Actions ── */}
+            <Text style={[styles.fieldLabel, { color: muted, marginBottom: 10 }]}>Admin Actions</Text>
+            <View style={styles.adminActionsRow}>
+              {/* Delete content button */}
+              {canDeleteContent && (
+                <TouchableOpacity
+                  style={[styles.adminActionBtn, styles.deleteBtn]}
+                  onPress={() => setConfirmDelete(true)}
+                  disabled={actionLoading}
+                >
+                  {actionLoading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={styles.adminActionBtnText}>
+                        🗑 Delete {report.target_type}
+                      </Text>
+                  }
+                </TouchableOpacity>
+              )}
+
+              {/* Restrict/unrestrict reporter */}
+              <TouchableOpacity
+                style={[
+                  styles.adminActionBtn,
+                  isRestricted ? styles.unrestrictBtn : styles.restrictBtn,
+                ]}
+                onPress={() => setConfirmRestrict(true)}
+                disabled={actionLoading}
+              >
+                {actionLoading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.adminActionBtnText}>
+                      {isRestricted ? '✅ Unrestrict reporter' : '🚫 Restrict reporter'}
+                    </Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            {/* Divider */}
+            <View style={[styles.divider, { backgroundColor: border }]} />
+
+            {/* Status picker */}
+            <Text style={[styles.fieldLabel, { color: muted }]}>Update status</Text>
+            <View style={styles.statusRow}>
+              {STATUS_OPTIONS.map(s => (
+                <TouchableOpacity
+                  key={s}
+                  style={[
+                    styles.statusChip,
+                    { borderColor: STATUS_COLORS[s] },
+                    status === s && { backgroundColor: STATUS_COLORS[s] },
+                  ]}
+                  onPress={() => setStatus(s)}
+                >
+                  <Text style={[
+                    styles.statusChipText,
+                    { color: status === s ? '#fff' : STATUS_COLORS[s] },
+                  ]}>
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Admin note */}
+            <Text style={[styles.fieldLabel, { color: muted, marginTop: 12 }]}>Admin note</Text>
+            <TextInput
+              style={[styles.noteInput, { color: colors.text, borderColor: border }]}
+              placeholder="Add a note about this report..."
+              placeholderTextColor={muted}
+              value={note}
+              onChangeText={setNote}
+              multiline
+              numberOfLines={3}
+            />
+
+            {/* Save button */}
+            <TouchableOpacity
+              style={[styles.saveBtn, { backgroundColor: colors.tint }, saving && { opacity: 0.6 }]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.saveBtnText}>Save changes</Text>
+              }
+            </TouchableOpacity>
+
+            {report.reviewer_name && (
+              <Text style={[styles.reviewedBy, { color: muted }]}>
+                Last reviewed by {report.reviewer_name}
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+    </>
   )
 }
 
@@ -247,10 +410,18 @@ export default function AdminReportsScreen() {
     setReports(prev => prev.map(r =>
       r.id === id ? { ...r, status, admin_note: note } : r
     ))
-    if (stats) {
-      // recalculate stats locally
-      load()
-    }
+    load() // reload stats
+  }
+
+  const handlePostDeleted = (targetId: string) => {
+    // Mark all reports targeting this content as resolved
+    setReports(prev => prev.map(r =>
+      r.target_id === targetId ? { ...r, status: 'resolved' } : r
+    ))
+  }
+
+  const handleUserRestricted = (reporterName: string, restricted: boolean) => {
+    // Visual feedback — no state change needed since restriction is on the user not the report
   }
 
   const filtered = filter === 'all' ? reports : reports.filter(r => r.status === filter)
@@ -314,6 +485,8 @@ export default function AdminReportsScreen() {
           <ReportCard
             report={item}
             onUpdate={handleUpdate}
+            onPostDeleted={handlePostDeleted}
+            onUserRestricted={handleUserRestricted}
             token={token}
             colors={colors}
             muted={muted}
@@ -397,6 +570,24 @@ const styles = StyleSheet.create({
   previewText: { fontSize: 13, lineHeight: 18 },
   fieldLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   fieldValue: { fontSize: 13, lineHeight: 18 },
+
+  // Admin action buttons
+  adminActionsRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
+  adminActionBtn: {
+    flex: 1,
+    minWidth: 140,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtn: { backgroundColor: '#EF4444' },
+  restrictBtn: { backgroundColor: '#F59E0B' },
+  unrestrictBtn: { backgroundColor: '#10B981' },
+  adminActionBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  divider: { height: 1, marginVertical: 14 },
+
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   statusChip: {
     borderWidth: 1.5,
@@ -424,4 +615,36 @@ const styles = StyleSheet.create({
   reviewedBy: { fontSize: 12, marginTop: 8, textAlign: 'center' },
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyText: { marginTop: 12, fontSize: 15 },
+
+  // Confirm modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBox: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '800', marginBottom: 8, color: '#111827' },
+  modalMessage: { fontSize: 14, lineHeight: 20, color: '#6B7280', marginBottom: 20 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  modalCancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  modalCancelText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  modalConfirmBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  modalConfirmText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 })
