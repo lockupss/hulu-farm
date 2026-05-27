@@ -1,194 +1,296 @@
-import CardUI from '@/components/ui/Card'
-import { CardHeader, CardTitle } from '@/components/ui/card-header'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import { getJSON } from '@/lib/api'
+import { deleteJSON, getJSON, postJSON } from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
 import { useTranslation } from '@/lib/i18n'
-import { translateNotificationContent } from '@/lib/translate-data'
-import { loadItem, saveItem } from '@/lib/storage'
 import { useRouter } from 'expo-router'
-import React, { useEffect, useState } from 'react'
-import { Alert, FlatList, StyleSheet, Switch, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
-import notificationsSeed from '../../data/notifications.json'
+import React, { useCallback, useEffect, useState } from 'react'
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native'
 
-const DEFAULT_PREFS = { 'Weather Alerts': true, 'Price Updates': true, 'Disease Alerts': true, 'Community Posts': true, 'Farm Reminders': true }
-
-const NOTIFICATION_PREF_LABELS: Record<string, string> = {
-  'Weather Alerts': 'pref_weather_alerts',
-  'Price Updates': 'pref_price_updates',
-  'Disease Alerts': 'pref_disease_alerts',
-  'Community Posts': 'pref_community_posts',
-  'Farm Reminders': 'pref_farm_reminders',
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface Notification {
+  id: string
+  notification_type: string
+  type: 'alert' | 'success' | 'info'
+  title: string
+  message: string
+  post_slug: string
+  comment_id: string
+  is_read: boolean
+  created_at: string
+  actor_name: string
+  actor_avatar: string | null
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatTime(iso: string) {
+  try {
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    const days = Math.floor(hrs / 24)
+    if (days < 7) return `${days}d ago`
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  } catch {
+    return ''
+  }
+}
+
+function getIcon(type: string, notifType: string) {
+  if (notifType === 'comment') return '💬'
+  if (notifType === 'reply') return '↩️'
+  if (notifType === 'like_post' || notifType === 'like_comment') return '❤️'
+  if (notifType === 'new_post') return '📢'
+  if (notifType === 'system') return '📣'
+  if (type === 'alert') return '⚠️'
+  if (type === 'success') return '✅'
+  return 'ℹ️'
+}
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function Notifications() {
-  const { width } = useWindowDimensions()
-  const compact = width < 390
-  const { t, lang } = useTranslation()
+  const { t } = useTranslation()
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
-  const [loading, setLoading] = useState(true)
-  const [notes, setNotes] = useState<any[]>(notificationsSeed)
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(DEFAULT_PREFS)
-
-  useEffect(() => {
-    let mounted = true
-  ;(async () => {
-      try {
-        // load persisted notifications and prefs
-        const persisted = await loadItem('notifications')
-        const savedPrefs = await loadItem('notification_prefs')
-        if (savedPrefs) setPrefs(savedPrefs)
-        if (persisted && Array.isArray(persisted)) setNotes(persisted)
-
-        // build prefs list for query
-  const enabled = Object.keys(savedPrefs || DEFAULT_PREFS).filter(k => (savedPrefs || DEFAULT_PREFS)[k])
-        const q = enabled.length ? `?prefs=${encodeURIComponent(JSON.stringify(enabled))}` : ''
-        const n = await getJSON(`/api/notifications${q}`)
-        const remote = Array.isArray(n) ? n : notificationsSeed
-        const merged = remote.map((r: any) => {
-          const p = (persisted || []).find((x: any) => String(x.id) === String(r.id))
-          return {
-            id: r.id || `${Date.now()}-${Math.random()}`,
-            type: r.type || (String(r.text || '').toLowerCase().includes('market') ? 'success' : (String(r.text || '').toLowerCase().includes('alert') ? 'alert' : 'info')),
-            title: r.title || r.text || 'Notification',
-            message: r.message || r.text || '',
-            time: r.time || r.time_ago || 'now',
-            read: p ? !!p.read : !!r.read
-          }
-        })
-        if (!mounted) return
-        setNotes(merged)
-        await saveItem('notifications', merged)
-    } catch {
-      console.warn('Failed to fetch notifications')
-      // fallback to seed data when remote fetch fails
-      setNotes(notificationsSeed.map((r: any, i: number) => ({ id: r.id || i, title: r.text, message: r.text, time: r.time || 'now', type: 'info', read: false })))
-    } finally {
-        if (mounted) setLoading(false)
-      }
-    })()
-    return () => { mounted = false }
-  }, [lang])
-
-  const togglePref = (key: string) => setPrefs(s => ({ ...s, [key]: !s[key] }))
+  const dark = colorScheme === 'dark'
+  const { token, isSignedIn } = useAuth()
   const router = useRouter()
 
-  const persistNotes = async (next: any[]) => {
-    setNotes(next)
-    try { await saveItem('notifications', next) } catch { console.warn('save notifications failed') }
-  }
+  const [notes, setNotes] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const markRead = async (id: number, value = true) => {
-    const next = notes.map(n => (String(n.id) === String(id) ? { ...n, read: value } : n))
-    await persistNotes(next)
-  }
+  const fetchNotifications = useCallback(async (silent = false) => {
+    if (!token) { setLoading(false); return }
+    if (!silent) setLoading(true)
+    setError(null)
+    try {
+      const data = await getJSON('/api/v1/notifications/', token)
+      const list: Notification[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.results)
+        ? data.results
+        : []
+      setNotes(list)
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load notifications')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [token])
 
-  const clearAll = async () => {
-    await persistNotes([])
-  }
+  useEffect(() => { fetchNotifications() }, [fetchNotifications])
 
-  // persist prefs and re-fetch notifications when prefs change
-  useEffect(() => {
-    ;(async () => {
-      try {
-        await saveItem('notification_prefs', prefs)
-        const enabled = Object.keys(prefs).filter(k => prefs[k])
-        const q = enabled.length ? `?prefs=${encodeURIComponent(JSON.stringify(enabled))}` : ''
-        const n = await getJSON(`/api/notifications${q}`)
-        if (Array.isArray(n)) {
-          setNotes(n.map((r: any) => ({ id: r.id, title: r.title || r.text, message: r.message || r.text, time: r.time || 'now', type: r.type || 'info', read: false })))
-          await saveItem('notifications', n)
-        }
-      } catch (e) {
-        console.warn('failed to re-fetch notifications with prefs', e)
-      }
-    })()
-  }, [prefs])
+  const onRefresh = () => { setRefreshing(true); fetchNotifications(true) }
 
-  const openMarket = (/*item*/) => router.push('/market')
-  const openForum = (/*item*/) => router.push('/community')
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'alert': return '⚠️'
-      case 'success': return '✅'
-      default: return 'ℹ️'
+  const markRead = async (id: string, value = true) => {
+    // Optimistic update
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, is_read: value } : n))
+    try {
+      await postJSON(`/api/v1/notifications/${id}/read/`, { read: value }, token)
+    } catch {
+      // Revert on failure
+      setNotes(prev => prev.map(n => n.id === id ? { ...n, is_read: !value } : n))
     }
   }
 
-  // sort unread first
-  const ordered = [...notes].sort((a,b) => (a.read === b.read) ? 0 : (a.read ? 1 : -1))
+  const markAllRead = async () => {
+    setNotes(prev => prev.map(n => ({ ...n, is_read: true })))
+    try {
+      await postJSON('/api/v1/notifications/mark-all-read/', {}, token)
+    } catch {
+      fetchNotifications(true)
+    }
+  }
 
-  const confirmClear = () => {
-    Alert.alert(t('clear_notifications_title') || 'Clear notifications', t('clear_notifications_confirm') || 'Are you sure you want to clear all notifications?', [
-      { text: t('cancel') || 'Cancel', style: 'cancel' },
-      { text: t('clear_all') || 'Clear', style: 'destructive', onPress: clearAll }
-    ])
+  const clearAll = async () => {
+    Alert.alert(
+      t('clear_notifications_title') || 'Clear notifications',
+      t('clear_notifications_confirm') || 'Are you sure you want to clear all notifications?',
+      [
+        { text: t('cancel') || 'Cancel', style: 'cancel' },
+        {
+          text: t('clear_all') || 'Clear', style: 'destructive',
+          onPress: async () => {
+            const prev = notes
+            setNotes([])
+            try {
+              await deleteJSON('/api/v1/notifications/clear/', token)
+            } catch {
+              setNotes(prev)
+            }
+          },
+        },
+      ]
+    )
+  }
+
+  const openTarget = (item: Notification) => {
+    if (item.post_slug) router.push('/community')
+    else router.push('/community')
+  }
+
+  const unreadCount = notes.filter(n => !n.is_read).length
+  const ordered = [...notes].sort((a, b) => (a.is_read === b.is_read ? 0 : a.is_read ? 1 : -1))
+
+  const bg = dark ? '#000' : colors.background
+  const border = dark ? '#2F3336' : '#EFF3F4'
+  const textMain = dark ? '#E7E9EA' : colors.text
+  const muted = dark ? '#71767B' : '#6b7280'
+
+  // ── Not signed in ──────────────────────────────────────────────────────────
+  if (!isSignedIn) {
+    return (
+      <View style={[styles.container, { backgroundColor: bg, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>🔔</Text>
+        <Text style={[styles.title, { color: textMain, textAlign: 'center' }]}>
+          {t('notifications_title') || 'Notifications'}
+        </Text>
+        <Text style={{ color: muted, marginTop: 8, textAlign: 'center', fontSize: 15 }}>
+          Sign in to see likes, comments, and replies on your posts.
+        </Text>
+        <TouchableOpacity
+          style={[styles.signInBtn, { backgroundColor: '#1D9BF0', marginTop: 24 }]}
+          onPress={() => router.push('/login')}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Sign in</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
+
+  // ── Loading ────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#1D9BF0" />
+      </View>
+    )
+  }
+
+  // ── Error ──────────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: bg, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Text style={{ fontSize: 40, marginBottom: 12 }}>⚠️</Text>
+        <Text style={{ color: muted, textAlign: 'center' }}>{error}</Text>
+        <TouchableOpacity style={[styles.signInBtn, { backgroundColor: '#1D9BF0', marginTop: 16 }]} onPress={() => fetchNotifications()}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}> 
-      <View style={[styles.headerRow, compact && styles.headerRowCompact, { padding: 16 }]}> 
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Header */}
+      <View style={[styles.header, { borderBottomColor: border }]}>
         <View>
-          <Text style={[styles.title, { color: colors.text }]}>{t('notifications_title')}</Text>
-          <Text style={[styles.subtitle, { color: colors.text }]}>{t('notifications_sub')}</Text>
+          <Text style={[styles.title, { color: textMain }]}>
+            {t('notifications_title') || 'Notifications'}
+            {unreadCount > 0 && (
+              <Text style={{ color: '#1D9BF0' }}> · {unreadCount}</Text>
+            )}
+          </Text>
+          <Text style={[styles.subtitle, { color: muted }]}>
+            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+          </Text>
         </View>
-        <TouchableOpacity onPress={confirmClear} style={{ alignSelf: 'center' }}>
-          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{t('clear_all')}</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {unreadCount > 0 && (
+            <TouchableOpacity onPress={markAllRead} style={styles.headerBtn}>
+              <Text style={{ color: '#1D9BF0', fontWeight: '600', fontSize: 13 }}>Mark all read</Text>
+            </TouchableOpacity>
+          )}
+          {notes.length > 0 && (
+            <TouchableOpacity onPress={clearAll} style={[styles.headerBtn, { marginLeft: 8 }]}>
+              <Text style={{ color: '#ef4444', fontWeight: '600', fontSize: 13 }}>
+                {t('clear_all') || 'Clear all'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      <CardUI style={{ marginHorizontal: 16 }}>
-        <CardHeader>
-          <CardTitle>{t('notification_prefs_title') || `🔔 ${t('notification_prefs')}`}</CardTitle>
-        </CardHeader>
-        <View style={{ paddingTop: 8 }}>
-          {Object.keys(prefs).map((k) => (
-            <View key={k} style={styles.prefRow}>
-              <Text>{t((NOTIFICATION_PREF_LABELS[k] || k) as 'pref_weather_alerts')}</Text>
-              <Switch value={prefs[k]} onValueChange={() => togglePref(k)} />
-            </View>
-          ))}
+      {ordered.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={{ fontSize: 52 }}>🔔</Text>
+          <Text style={[styles.emptyTitle, { color: textMain }]}>No notifications yet</Text>
+          <Text style={[styles.emptyText, { color: muted }]}>
+            When someone likes or comments on your posts, it will show up here.
+          </Text>
         </View>
-      </CardUI>
-
-      {loading ? (
-        <View style={{ padding: 16 }}><Text>{t('loading')}</Text></View>
       ) : (
         <FlatList
           data={ordered}
-          keyExtractor={(i) => String(i.id)}
-          contentContainerStyle={{ padding: 16 }}
-          renderItem={({ item }) => {
-            const { title: locTitle, message: locMessage } = translateNotificationContent(item, t)
-            return (
-              <CardUI variant={item.type === 'alert' ? 'alert' : item.type === 'info' ? 'info' : undefined}>
-                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                  <Text style={{ fontSize: 22 }}>{getIcon(item.type)}</Text>
-                  <View style={{ flex: 1 }}>
-                    <View style={[styles.noteHeaderRow, compact && styles.noteHeaderRowCompact]}>
-                      <Text style={{ fontWeight: '700', flex: 1 }}>{locTitle}</Text>
-                      <View style={[styles.noteMetaActions, compact && styles.noteMetaActionsCompact]}>
-                          {!item.read && <View style={styles.unreadDot} />}
-                        <TouchableOpacity onPress={() => markRead(item.id, !item.read)} style={{ marginLeft: 12 }}>
-                          <Text style={{ color: '#0366d6' }}>{item.read ? t('mark_unread') : t('mark_read')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <Text style={{ marginTop: 6 }}>{locMessage}</Text>
-                    <View style={[styles.footerRow, compact && styles.footerRowCompact]}>
-                      <Text style={styles.time}>{item.time}</Text>
-                      <View style={[styles.linkRow, compact && styles.linkRowCompact]}>
-                        <TouchableOpacity onPress={openMarket}><Text style={{ color: '#059669' }}>{t('view_market')}</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={openForum} style={{ marginLeft: 12 }}><Text style={{ color: '#0366d6' }}>{t('view_forum')}</Text></TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingVertical: 8, paddingHorizontal: 12 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D9BF0" />}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => { openTarget(item); markRead(item.id) }}
+              style={[
+                styles.notifCard,
+                {
+                  backgroundColor: item.is_read
+                    ? (dark ? '#16181C' : '#FFFFFF')
+                    : (dark ? '#1A2535' : '#EFF6FF'),
+                  borderColor: item.is_read ? border : (dark ? '#2A4A7F' : '#BFDBFE'),
+                },
+              ]}
+            >
+              {/* Unread dot */}
+              {!item.is_read && <View style={styles.unreadDot} />}
+
+              {/* Icon */}
+              <Text style={styles.icon}>{getIcon(item.type, item.notification_type)}</Text>
+
+              {/* Content */}
+              <View style={{ flex: 1 }}>
+                <View style={styles.notifTop}>
+                  <Text style={[styles.notifTitle, { color: textMain }]} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.notifTime, { color: muted }]}>{formatTime(item.created_at)}</Text>
                 </View>
-              </CardUI>
-            )
-          }}
+                {!!item.message && (
+                  <Text style={[styles.notifMsg, { color: muted }]} numberOfLines={2}>
+                    {item.message}
+                  </Text>
+                )}
+                <View style={styles.notifFooter}>
+                  <TouchableOpacity
+                    onPress={() => markRead(item.id, !item.is_read)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={{ color: '#1D9BF0', fontSize: 12 }}>
+                      {item.is_read ? 'Mark unread' : 'Mark read'}
+                    </Text>
+                  </TouchableOpacity>
+                  {item.post_slug ? (
+                    <TouchableOpacity onPress={() => { openTarget(item); markRead(item.id) }}>
+                      <Text style={{ color: '#059669', fontSize: 12 }}>View post →</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
         />
       )}
     </View>
@@ -197,20 +299,43 @@ export default function Notifications() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { padding: 16 },
-  title: { fontSize: 18, fontWeight: '700' },
-  subtitle: { fontSize: 13, marginTop: 6 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerRowCompact: { flexDirection: 'column', alignItems: 'flex-start', gap: 8 },
-  noteHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  noteHeaderRowCompact: { flexDirection: 'column', alignItems: 'flex-start', gap: 8 },
-  noteMetaActions: { flexDirection: 'row', alignItems: 'center' },
-  noteMetaActionsCompact: { width: '100%', justifyContent: 'space-between' },
-  footerRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  footerRowCompact: { flexDirection: 'column', gap: 8 },
-  linkRow: { flexDirection: 'row', gap: 8 },
-  linkRowCompact: { justifyContent: 'flex-start' },
-  time: { marginTop: 8, color: '#6b7280' },
-  prefRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
-  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0ea5a4' }
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
+  headerBtn: { paddingHorizontal: 4 },
+  title: { fontSize: 20, fontWeight: '800' },
+  subtitle: { fontSize: 13, marginTop: 2 },
+  notifCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 12,
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 14,
+    left: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1D9BF0',
+  },
+  icon: { fontSize: 22, marginTop: 1 },
+  notifTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  notifTitle: { fontSize: 14, fontWeight: '700', flex: 1, lineHeight: 19 },
+  notifTime: { fontSize: 11, marginTop: 2, flexShrink: 0 },
+  notifMsg: { fontSize: 13, marginTop: 4, lineHeight: 18 },
+  notifFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginTop: 8 },
+  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  signInBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
 })
