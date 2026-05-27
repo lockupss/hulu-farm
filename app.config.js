@@ -65,5 +65,7 @@ module.exports = ({ config }) => ({
     // This is what makes the API base URL available on physical devices.
     // Set EXPO_PUBLIC_API_BASE=http://YOUR_PC_IP:8000 in your .env file.
     apiBase: process.env.EXPO_PUBLIC_API_BASE || '',
+    // Prophet Flask model URL (port 5000). Set EXPO_PUBLIC_PROPHET_BASE in your .env file.
+    prophetBase: process.env.EXPO_PUBLIC_PROPHET_BASE || '',
   },
 })
