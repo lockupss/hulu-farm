@@ -2,10 +2,11 @@ import CategoryPicker from '@/components/category-picker'
 import { useToast } from '@/components/toast'
 import { Colors } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
-import { getJSON, postJSON, resolveMediaUrl } from '@/lib/api'
+import { getJSON, postFormData, postJSON, resolveMediaUrl } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { useTranslation } from '@/lib/i18n'
 import { loadItem, saveItem } from '@/lib/storage'
+import * as ImagePicker from 'expo-image-picker'
 import { useRouter } from 'expo-router'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -351,6 +352,24 @@ function GridCard({ item, onPress, onLike, dark }: {
 }
 
 // ── Post Card ──────────────────────────────────────────────────────────────────
+// ── Post Image ────────────────────────────────────────────────────────────────
+function PostImage({ uri }: { uri: string }) {
+  const [resolvedUri, setResolvedUri] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    resolveMediaUrl(uri).then(u => { if (!cancelled) setResolvedUri(u) })
+    return () => { cancelled = true }
+  }, [uri])
+  if (!resolvedUri) return null
+  return (
+    <Image
+      source={{ uri: resolvedUri }}
+      style={styles.postImage}
+      resizeMode="cover"
+    />
+  )
+}
+
 function PostCard({ item, onReply, onLike, onOpenProfile, onReport, canInteract, dark }: {
   item: any; onReply: any; onLike: any; onOpenProfile?: any; onReport: any; canInteract: boolean; dark: boolean
 }) {
@@ -412,6 +431,11 @@ function PostCard({ item, onReply, onLike, onOpenProfile, onReport, canInteract,
         <Text style={[styles.postBody, { color: dark ? '#C9D1D9' : '#3D4043' }]}>
           {item.content || item.text}
         </Text>
+
+        {/* Post image */}
+        {item.image && (
+          <PostImage uri={item.image} />
+        )}
 
         {/* Attachments */}
         {item.attachments?.map((a: any) => (
@@ -490,22 +514,39 @@ function PostCard({ item, onReply, onLike, onOpenProfile, onReport, canInteract,
 
 // ── Compose Modal ──────────────────────────────────────────────────────────────
 function ComposeModal({ visible, onClose, onPost, user, dark }: {
-  visible: boolean; onClose: () => void; onPost: (text: string, category: string) => void
+  visible: boolean; onClose: () => void; onPost: (text: string, category: string, imageUri?: string) => void
   user: any; dark: boolean
 }) {
   const [text, setText] = useState('')
   const [category, setCategory] = useState('General')
+  const [imageUri, setImageUri] = useState<string | null>(null)
   const tint = '#1D9BF0'
   const bg = dark ? '#000000' : '#FFFFFF'
   const border = dark ? '#2F3336' : '#EFF3F4'
   const muted = dark ? '#71767B' : '#536471'
   const textCol = dark ? '#E7E9EA' : '#0F1419'
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') return
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    })
+    if (!result.canceled && result.assets.length > 0) {
+      setImageUri(result.assets[0].uri)
+    }
+  }
+
+  const removeImage = () => setImageUri(null)
+
   const submit = () => {
     if (!text.trim()) return
-    onPost(text, category)
+    onPost(text, category, imageUri ?? undefined)
     setText('')
     setCategory('General')
+    setImageUri(null)
     onClose()
   }
 
@@ -527,25 +568,41 @@ function ComposeModal({ visible, onClose, onPost, user, dark }: {
           </TouchableOpacity>
         </View>
 
-        {/* Compose area */}
-        <View style={[styles.modalBody, { borderBottomColor: border }]}>
-          <Avatar name={user?.displayName} size={44} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <TextInput
-              style={[styles.modalInput, { color: textCol }]}
-              placeholder="What's happening on your farm?"
-              placeholderTextColor={muted}
-              value={text}
-              onChangeText={setText}
-              multiline
-              autoFocus
-              maxLength={500}
-            />
+        <ScrollView keyboardShouldPersistTaps="handled">
+          {/* Compose area */}
+          <View style={[styles.modalBody, { borderBottomColor: border }]}>
+            <Avatar name={user?.displayName} size={44} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <TextInput
+                style={[styles.modalInput, { color: textCol }]}
+                placeholder="What's happening on your farm?"
+                placeholderTextColor={muted}
+                value={text}
+                onChangeText={setText}
+                multiline
+                autoFocus
+                maxLength={500}
+              />
+            </View>
           </View>
-        </View>
 
-        {/* Category selector */}
+          {/* Image preview */}
+          {imageUri && (
+            <View style={[styles.imagePreviewContainer, { borderColor: border }]}>
+              <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
+              <TouchableOpacity style={styles.removeImageBtn} onPress={removeImage}>
+                <Text style={styles.removeImageText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Footer: photo button + category selector */}
         <View style={[styles.modalFooter, { borderTopColor: border }]}>
+          <TouchableOpacity onPress={pickImage} style={[styles.photoPickerBtn, { borderColor: border }]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={{ fontSize: 20 }}>🖼️</Text>
+          </TouchableOpacity>
           <Text style={[styles.categoryLabel, { color: muted }]}>Topic</Text>
           <CategoryPicker
             category={category}
@@ -627,19 +684,34 @@ export default function Community() {
     return true
   }
 
-  const handlePost = async (text: string, category: string) => {
+  const handlePost = async (text: string, category: string, imageUri?: string) => {
     if (!canInteract) { showToast(t('sign_in_to_post') || 'Sign in to post', 'error'); router.push('/login'); return }
     const nowISO = new Date().toISOString()
     const newPost: any = {
       id: Date.now(), author: user?.displayName || 'You', authorUserId: user?.id,
       title: text.slice(0, 60), content: text, replies: [], likes: 0,
       time: nowISO, category, slug: String(Date.now()),
+      image: imageUri || null,
     }
     const prev = postsRef.current
     updatePosts([newPost, ...prev])
     await saveItem('forum_posts', [newPost, ...prev])
     try {
-      const created = await postJSON('/api/v1/forum/posts/', { title: text.slice(0, 60) || 'Post', body: text, status: 'published' }, token)
+      let created: any
+      if (imageUri) {
+        // Use multipart/form-data when an image is attached
+        const formData = new FormData()
+        formData.append('title', text.slice(0, 60) || 'Post')
+        formData.append('body', text)
+        formData.append('status', 'published')
+        const filename = imageUri.split('/').pop() || 'photo.jpg'
+        const ext = filename.split('.').pop()?.toLowerCase() || 'jpg'
+        const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+        formData.append('image', { uri: imageUri, name: filename, type: mimeType } as any)
+        created = await postFormData('/api/v1/forum/posts/', formData, token)
+      } else {
+        created = await postJSON('/api/v1/forum/posts/', { title: text.slice(0, 60) || 'Post', body: text, status: 'published' }, token)
+      }
       if (created?.id) { const next = [normalizePost(created), ...prev]; updatePosts(next); await saveItem('forum_posts', next) }
     } catch (e: any) {
       showToast(e?.message || 'Post failed', 'error')
@@ -1002,6 +1074,12 @@ const styles = StyleSheet.create({
   modalBody: { flexDirection: 'row', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   modalInput: { fontSize: 18, lineHeight: 26, minHeight: 100, textAlignVertical: 'top' },
   modalFooter: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, gap: 12 },
+  photoPickerBtn: { padding: 6, borderRadius: 8, borderWidth: 1 },
+  imagePreviewContainer: { marginHorizontal: 16, marginBottom: 12, borderRadius: 12, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
+  imagePreview: { width: '100%', height: 200, borderRadius: 12 },
+  removeImageBtn: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 14, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  removeImageText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  postImage: { width: '100%', height: 200, borderRadius: 12, marginTop: 8, marginBottom: 4 },
   categoryLabel: { fontSize: 13, fontWeight: '700' },
   charCount: { textAlign: 'right', paddingRight: 16, paddingTop: 4, fontSize: 13, fontWeight: '600' },
 

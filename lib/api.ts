@@ -141,6 +141,25 @@ export async function getJSON(path: string, token?: string | null) {
   return res.json()
 }
 
+/** Upload a post with an optional image via multipart/form-data. */
+export async function postFormData(path: string, formData: FormData, token?: string | null) {
+  const headers: Record<string, string> = {}
+  // Do NOT set Content-Type — the browser/fetch sets it with the correct boundary
+  if (token) headers.Authorization = `Bearer ${token}`
+  const base = await ensureBase()
+  const pathWithLang = withLang(path)
+  const url = base ? `${base.replace(/\/$/, '')}${pathWithLang}` : pathWithLang
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', headers, body: formData })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`network: ${msg}`)
+  }
+  if (!res.ok) throw new Error(`Post error ${res.status}: ${await parseErrorDetail(res)}`)
+  return res.json()
+}
+
 export async function postJSON(path: string, body: unknown, token?: string | null) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers.Authorization = `Bearer ${token}`
@@ -160,6 +179,24 @@ export async function postJSON(path: string, body: unknown, token?: string | nul
     throw new Error(`network: ${msg}`)
   }
   if (!res.ok) throw new Error(`Post error ${res.status}: ${await parseErrorDetail(res)}`)
+  return res.json()
+}
+
+/** PATCH with multipart/form-data — used for profile avatar uploads. */
+export async function patchFormData(path: string, formData: FormData, token: string | null) {
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  const base = await ensureBase()
+  const pathWithLang = withLang(path)
+  const url = base ? `${base.replace(/\/$/, '')}${pathWithLang}` : pathWithLang
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'PATCH', headers, body: formData })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`network: ${msg}`)
+  }
+  if (!res.ok) throw new Error(`Patch error ${res.status}: ${await parseErrorDetail(res)}`)
   return res.json()
 }
 

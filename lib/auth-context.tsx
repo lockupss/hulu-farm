@@ -1,4 +1,4 @@
-import { getJSON, patchJSON, postJSON } from '@/lib/api'
+import { getJSON, patchFormData, patchJSON, postJSON } from '@/lib/api'
 import { loadItem, removeItems, saveItem } from '@/lib/storage'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
@@ -170,11 +170,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }) => {
     const t = token
     if (!t) throw new Error('not_signed_in')
-    const body: Record<string, any> = {}
-    if (patch.displayName !== undefined) body.full_name = patch.displayName
-    if (patch.bio !== undefined) body.bio = patch.bio
-    if (patch.locationLabel !== undefined) body.location = patch.locationLabel
-    const data = await patchJSON('/api/v1/auth/me/', body, t)
+
+    let data: any
+    if (patch.avatar) {
+      // Send as multipart/form-data so Django's ImageField can receive the file
+      const formData = new FormData()
+      if (patch.displayName !== undefined) formData.append('full_name', patch.displayName)
+      if (patch.bio !== undefined) formData.append('bio', patch.bio)
+      if (patch.locationLabel !== undefined) formData.append('location', patch.locationLabel)
+      const ext = patch.avatar.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+      // Convert base64 to a Blob/File-compatible object for React Native
+      const uri = `data:${mimeType};base64,${patch.avatar.data}`
+      formData.append('avatar', { uri, name: patch.avatar.name, type: mimeType } as any)
+      data = await patchFormData('/api/v1/auth/me/', formData, t)
+    } else {
+      const body: Record<string, any> = {}
+      if (patch.displayName !== undefined) body.full_name = patch.displayName
+      if (patch.bio !== undefined) body.bio = patch.bio
+      if (patch.locationLabel !== undefined) body.location = patch.locationLabel
+      if (patch.clearAvatar) body.avatar = null
+      data = await patchJSON('/api/v1/auth/me/', body, t)
+    }
+
     const next = mapUser(data, user?.email)
     setUser(next)
     await saveItem(USER_KEY, next)
