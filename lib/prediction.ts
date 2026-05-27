@@ -110,3 +110,27 @@ export function nextNDays(n: number): string[] {
   }
   return result
 }
+/**
+ * Fetch predictions for a single commodity by name.
+ * Used by market.tsx when a crop filter is active.
+ */
+export async function fetchPrediction(
+  days = 30,
+  commodity = 'Teff'
+): Promise<PricePrediction[] | null> {
+  const base = getPredictionBase()
+  const url  = `${base}/predict?days=${days}&commodity=${encodeURIComponent(commodity)}`
+
+  const controller = new AbortController()
+  const timeout    = setTimeout(() => controller.abort(), 8000)
+
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json() as PricePrediction[]
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
