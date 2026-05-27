@@ -3,16 +3,15 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import Header from '@/components/header';
-import TransactionBanner from '@/components/transaction-banner';
 import { ToastProvider } from '@/components/toast';
-import { ThemeProvider } from '@/hooks/use-color-scheme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import TransactionBanner from '@/components/transaction-banner';
+import { Colors } from '@/constants/theme';
+import { ThemeProvider, useColorScheme } from '@/hooks/use-color-scheme';
 import { AppDataProvider } from '@/lib/app-data';
 import { AuthProvider } from '@/lib/auth-context';
 import { I18nProvider } from '@/lib/i18n';
 import React from 'react';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
-import { Colors } from '@/constants/theme';
 
 export const unstable_settings = {
   anchor: '(tabs)',

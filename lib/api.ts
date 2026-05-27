@@ -14,6 +14,12 @@ const configured =
   typeof process !== 'undefined' && process.env && process.env.API_BASE ? String(process.env.API_BASE) : ''
 
 function envPublicBase(): string {
+  // 1. Read from app.config.js extra — most reliable on physical devices
+  const fromExtra = Constants.expoConfig?.extra?.apiBase
+  if (fromExtra && typeof fromExtra === 'string' && fromExtra.trim()) {
+    return fromExtra.trim().replace(/\/$/, '')
+  }
+  // 2. Fallback: Babel-replaced env var (works in dev builds, not always Expo Go)
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_BASE) {
     return String(process.env.EXPO_PUBLIC_API_BASE).replace(/\/$/, '')
   }

@@ -31,7 +31,7 @@ export default function RegisterScreen() {
       const msg = e instanceof Error ? e.message : String(e)
       if (msg.includes('409') || msg.includes('email_in_use')) setErr(t('email_in_use') || 'That email is already registered.')
       else if (msg.startsWith('network:') || msg.includes('Network request failed') || msg.includes('Failed to fetch'))
-        setErr(t('api_unreachable') || 'Cannot reach the API. Run npm run api on your computer and use the same Wi‑Fi; set EXPO_PUBLIC_API_BASE to http:// 192.168.137.43:8000 if needed.')
+        setErr(t('api_unreachable') || 'Cannot reach the API. Run npm run api on your computer and use the same Wi‑Fi; set EXPO_PUBLIC_API_BASE to http:// 10.192.251.71:8000 if needed.')
       else if (msg.includes('persist_failed'))
         setErr(t('server_save_failed') || 'Server could not save your account. Check that the data folder is writable.')
       else setErr(msg.length > 120 ? (t('register_failed') || 'Could not create account.') : msg)

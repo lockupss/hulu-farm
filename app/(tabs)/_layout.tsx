@@ -5,12 +5,14 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@/lib/auth-context';
 import { useTranslation } from '@/lib/i18n';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { t } = useTranslation()
   const colors = Colors[colorScheme ?? 'light']
+  const { isAdmin } = useAuth()
 
   return (
     <Tabs
@@ -28,7 +30,6 @@ export default function TabLayout() {
           elevation: 8,
           zIndex: 100,
           overflow: 'visible' as const,
-          // Cross-platform shadow (iOS + web)
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.08,
@@ -51,7 +52,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
-      {/* Explore tab removed per user request */}
       <Tabs.Screen
         name="weather"
         options={{
@@ -69,7 +69,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="community"
         options={{
-            title: t('forum'),
+          title: t('forum'),
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} />,
         }}
       />
@@ -87,6 +87,15 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
         }}
       />
+      {/* Admin tab — only visible to staff users */}
+      <Tabs.Screen
+        name="admin-reports"
+        options={{
+          title: 'Reports',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="flag.fill" color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="account"
         options={{
@@ -95,7 +104,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.crop.circle.fill" color={color} />,
         }}
       />
-
     </Tabs>
   );
 }

@@ -531,6 +531,6 @@ const server = http.createServer((req, res) => {
   })
 })
 
-server.listen(PORT, ' 192.168.137.43', () => {
+server.listen(PORT, ' 10.192.251.71', () => {
   console.log(`API server listening on http://localhost:${PORT} (bind 0.0.0.0 — use your LAN IP from phone/expo)`)
 })

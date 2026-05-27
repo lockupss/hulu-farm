@@ -236,11 +236,12 @@ function ReplyList({ post, replies, onReply, onLike, onOpenProfile, canInteract 
   )
 }
 
-function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
+function DiscussionItem({ item, onReply, onLike, onOpenProfile, onReport, canInteract }: {
   item: any
   onReply: (id: string, text: string, parentReplyId?: string) => void
   onLike: (id: string, replyId?: string) => void
   onOpenProfile?: (userId: string) => void
+  onReport: (id: string, type: string, preview: string) => void
   canInteract: boolean
 }) {
   const { t } = useTranslation()
@@ -301,6 +302,12 @@ function DiscussionItem({ item, onReply, onLike, onOpenProfile, canInteract }: {
           count={item.likes ?? 0}
           onPress={() => onLike(String(item.id))}
         />
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => onReport(String(item.id), 'post', item.content || item.title || '')}
+        >
+          <Text style={[styles.actionText, { color: '#EF4444' }]}>🚩 Report</Text>
+        </TouchableOpacity>
       </View>
 
       {replying && (
@@ -409,6 +416,18 @@ export default function Community() {
   }
 
   const openProfile = (uid: string) => { router.push(`/user/${uid}`) }
+
+  const openReport = (id: string, type: string, preview: string) => {
+    if (!canInteract) {
+      showToast('Sign in to report content', 'error')
+      router.push('/login')
+      return
+    }
+    router.push({
+      pathname: '/report',
+      params: { target_type: type, target_id: id, target_preview: preview.slice(0, 300) },
+    })
+  }
 
   const handlePost = async () => {
     if (authLoading) return
@@ -674,6 +693,7 @@ export default function Community() {
               onLike={likePost}
               onReply={replyToPost}
               onOpenProfile={openProfile}
+              onReport={openReport}
               canInteract={canInteract}
             />
           )}
