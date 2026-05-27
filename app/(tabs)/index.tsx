@@ -7,11 +7,16 @@ import { Colors, Typography } from '@/constants/theme'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { useResponsive } from '@/hooks/use-responsive'
 import { useAppData } from '@/lib/app-data'
+import { useAuth } from '@/lib/auth-context'
 import { useTranslation } from '@/lib/i18n'
+import { Redirect } from 'expo-router'
 import React from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
 export default function Home() {
+  const { isAdmin, loading } = useAuth()
+  // Redirect admins away from user home immediately
+  if (!loading && isAdmin) return <Redirect href="/admin-home" />
   const responsive = useResponsive()
   const colorScheme = useColorScheme()
   const colors = Colors[colorScheme ?? 'light']
